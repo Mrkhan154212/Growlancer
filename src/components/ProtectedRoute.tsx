@@ -18,7 +18,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const [serverRole, setServerRole] = useState<UserRole | null>(null);
   const [verifying, setVerifying] = useState(true);
 
-  // ── Server-side role verification (ALWAYS called) ──
+  // ── Server-side role verification + suspension check (ALWAYS called) ──
   useEffect(() => {
     let cancelled = false;
 
@@ -31,9 +31,18 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
         const { data: profileResult, error: profileError } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, suspended_at')
           .eq('id', user.id)
           .single();
+
+        // Check if user is suspended
+        if (profileResult?.suspended_at) {
+          captureInfo('ProtectedRoute: suspended user blocked', { userId: user.id });
+          await supabase.auth.signOut();
+          window.location.href = '/?modal=login';
+          if (!cancelled) { setVerifying(false); }
+          return;
+        }
 
         if (cancelled) return;
 

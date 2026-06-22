@@ -253,6 +253,11 @@ const OnboardingPage = lazy(() =>
   import('@pages/OnboardingPage').then(m => ({ default: m.OnboardingPage }))
 );
 
+// Auth Callback Page (for Google/LinkedIn OAuth)
+const AuthCallbackPage = lazy(() =>
+  import('@pages/AuthCallbackPage').then(m => ({ default: m.AuthCallbackPage }))
+);
+
 // System Pages
 const NotFoundPage = lazy(() =>
   import('@pages/NotFoundPage').then(m => ({ default: m.NotFoundPage }))
@@ -306,6 +311,9 @@ function App() {
                 <Route path="contests" element={<ContestsPage />} />
                 <Route path="contests/:contestId" element={<ContestDetailPage />} />
               </Route>
+
+              {/* Auth Callback - for Google/LinkedIn OAuth redirects */}
+              <Route path="auth/callback" element={<AuthCallbackPage />} />
 
               {/* Debug route is only available in development */}
               {isDev && DevDebugPage && <Route path="/debug" element={<DevDebugPage />} />}

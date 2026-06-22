@@ -23,8 +23,7 @@ import {
 import { supabase, realtimeChannels } from '../../lib/supabase';
 import type { UserRole } from '../../types/auth';
 
-interface AdminUser {
-  id: string;
+interface AdminUser {                  id: string;
   email: string;
   name: string;
   role: UserRole;
@@ -33,6 +32,9 @@ interface AdminUser {
   is_pro: boolean | null;
   onboarding_completed: boolean | null;
   referral_code: string | null;
+  suspended_at: string | null;
+  suspend_reason: string | null;
+  deleted_at: string | null;
 }
 
 function getUserInitials(name: string): string {
@@ -65,7 +67,7 @@ export function AdminUsersPage() {
     try {
       let query = supabase
         .from('profiles')
-        .select('id, email, name, role, avatar, created_at, is_pro, onboarding_completed, referral_code')
+        .select('id, email, name, role, avatar, created_at, is_pro, onboarding_completed, referral_code, suspended_at, suspend_reason, deleted_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -140,10 +142,29 @@ export function AdminUsersPage() {
   };
 
   const handleSuspendUser = async (userId: string, userName: string) => {
-    if (!confirm(`🚫 Suspend "${userName}"? They will lose access to the platform.`)) return;
+    const reason = prompt(`🚫 Suspend "${userName}"? Enter reason (optional):`);
+    if (reason === null) return; // User cancelled prompt
     setActionLoading(`suspend-${userId}`);
     try {
-      await supabase.from('profiles').update({ deleted_at: new Date().toISOString() }).eq('id', userId);
+      await supabase.from('profiles').update({
+        suspended_at: new Date().toISOString(),
+        suspend_reason: reason?.trim() || null,
+        suspended_by: (await supabase.auth.getUser()).data.user?.id || null,
+      }).eq('id', userId);
+      await fetchUsers();
+    } catch (err) { console.error(err); }
+    finally { setActionLoading(null); setOpenDropdown(null); }
+  };
+
+  const handleReactivateUser = async (userId: string, userName: string) => {
+    if (!confirm(`🔄 Reactivate "${userName}"? They will regain full platform access.`)) return;
+    setActionLoading(`reactivate-${userId}`);
+    try {
+      await supabase.from('profiles').update({
+        suspended_at: null,
+        suspend_reason: null,
+        suspended_by: null,
+      }).eq('id', userId);
       await fetchUsers();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }
@@ -335,17 +356,29 @@ export function AdminUsersPage() {
                               )}
                               {/* Divider */}
                               <div className="my-1 border-t border-slate-700/50" />
-                              {/* Suspend User */}
-                              <button onClick={() => handleSuspendUser(user.id, user.name)}
-                                disabled={actionLoading === `suspend-${user.id}`}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors">
-                                {actionLoading === `suspend-${user.id}` ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <Ban className="w-3.5 h-3.5" />
-                                )}
-                                Suspend User
-                              </button>
+                              {user.suspended_at ? (
+                                <button onClick={() => handleReactivateUser(user.id, user.name)}
+                                  disabled={actionLoading === `reactivate-${user.id}`}
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                                  {actionLoading === `reactivate-${user.id}` ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                  )}
+                                  Reactivate User
+                                </button>
+                              ) : (
+                                <button onClick={() => handleSuspendUser(user.id, user.name)}
+                                  disabled={actionLoading === `suspend-${user.id}`}
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                                  {actionLoading === `suspend-${user.id}` ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Ban className="w-3.5 h-3.5" />
+                                  )}
+                                  Suspend User
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
