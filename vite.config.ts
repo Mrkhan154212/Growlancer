@@ -81,18 +81,6 @@ export default defineConfig({
   build: {
     // Enable source maps for production debugging (but not for end users)
     sourcemap: false,
-    // Terser options for better minification
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.debug', 'console.info'],
-      },
-      output: {
-        comments: false,
-      },
-    },
     // Chunk size warnings at 500KB (down from default 1MB)
     chunkSizeWarningLimit: 500,
     rollupOptions: {
