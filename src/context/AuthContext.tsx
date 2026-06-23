@@ -12,7 +12,7 @@ import { captureError, captureInfo } from '../lib/telemetry';
 // Re-export for backward compatibility (used by ProtectedRoute)
 export type { UserRole };
 // Re-export type alias for backward compatibility
-export interface User extends AuthUser {}
+export type User = AuthUser;
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -25,7 +25,7 @@ interface AuthContextType {
   login: (
     email: string,
     password: string
-  ) => Promise<{ success: boolean; error?: string; role?: UserRole }>;
+  ) => Promise<{ success: boolean; error?: string; role?: UserRole; onboardingNeeded?: boolean }>;
   signup: (
     email: string,
     password: string,
@@ -107,8 +107,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      // During login (no roleHint), don't create new profile - only fetch existing
-      const profile = await ensureUserProfile(authUser, roleHint, !!roleHint);
+      // Try to fetch existing profile
+      let profile = await ensureUserProfile(authUser, roleHint, !!roleHint);
+
+      // 🆕 OAuth fallback: if email is confirmed (auto-verified by OAuth provider)
+      // but no profile exists yet, create one with default 'freelancer' role.
+      // The onboarding page will let them switch to 'client' if needed.
+      if (!profile && authUser.email_confirmed_at) {
+        devLog('[Auth] OAuth user without profile — auto-creating with default role');
+        const meta = authUser.user_metadata || {};
+        const name =
+          (typeof meta.name === 'string' && meta.name.trim()) ||
+          (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+          authUser.email?.split('@')[0] ||
+          'User';
+        const refCode = createReferralCode('FR');
+        profile = await createUserProfile(
+          authUser.id,
+          authUser.email || '',
+          name,
+          roleHint || 'freelancer',
+          refCode,
+        );
+      }
 
       if (!profile) {
         if (roleHint) {
@@ -129,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUser(profile);
     },
-    [ensureUserProfile]
+    [ensureUserProfile, createUserProfile, createReferralCode]
   );
 
   useEffect(() => {
@@ -346,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     provider: 'google' | 'linkedin_oidc'
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
@@ -373,7 +394,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (
     email: string,
     password: string
-  ): Promise<{ success: boolean; error?: string; role?: UserRole }> => {
+  ): Promise<{ success: boolean; error?: string; role?: UserRole; onboardingNeeded?: boolean }> => {
     try {
       setIsLoading(true);
       devLog('[Auth] Login attempt started');
@@ -414,7 +435,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(profile);
           setIsLoading(false);
           devLog('[Auth] Login successful:', profile.email, 'role:', profile.role);
-          return { success: true, role: profile.role };
+          // 🆕 Return onboarding flag so LoginModal can redirect to /onboarding if needed
+          return { 
+            success: true, 
+            role: profile.role,
+            onboardingNeeded: profile.onboardingCompleted === false,
+          };
         }
 
         devWarn('[Auth] Profile not found after retry, signing out user');
