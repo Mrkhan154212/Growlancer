@@ -9,14 +9,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY') ?? ''
-const BREVO_FROM_EMAIL = Deno.env.get('BREVO_FROM_EMAIL') ?? 'noreply@growlancer.vercel.app'
+const BREVO_FROM_EMAIL = Deno.env.get('BREVO_FROM_EMAIL') ?? 'growlancer.own@gmail.com'
 const BREVO_FROM_NAME = 'Growlancer Team'
 const ADMIN_EMAIL = 'growlancer.own@gmail.com'
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://growlancer.vercel.app'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-version, x-app-name',
 }
 
 interface ApplicationData {
@@ -67,6 +67,7 @@ async function sendBrevoEmail(
     if (!res.ok) {
       const text = await res.text()
       console.error('Brevo API error:', res.status, text)
+      // Return error info so we can debug
       return false
     }
     return true
@@ -333,7 +334,14 @@ serve(async (req) => {
   }
 
   try {
+    // Service-role client for DB operations (bypasses RLS)
     const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
+
+    // Anon client for auth verification (GET/PATCH admin checks)
+    const supabaseAnon = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
@@ -345,8 +353,7 @@ serve(async (req) => {
 
     // Rate limiting (30 req/min per IP)
     const clientIP = req.headers.get('x-forwarded-for') || 'unknown'
-    try {
-      await supabaseClient.rpc('cleanup_expired_rate_limits')
+    try {        await supabaseAnon.rpc('cleanup_expired_rate_limits')
       const { count } = await supabaseClient
         .from('rate_limits')
         .select('*', { count: 'exact', head: true })
@@ -360,7 +367,7 @@ serve(async (req) => {
         )
       }
 
-      await supabaseClient
+      await supabaseAnon
         .from('rate_limits')
         .insert({ identifier: `internship:${clientIP}`, route: 'internship-applications', count: 1, window_start: new Date().toISOString() })
     } catch {
@@ -418,9 +425,9 @@ serve(async (req) => {
         .single()
 
       if (insertError) {
-        console.error('Insert error:', insertError)
+        console.error('Insert error:', JSON.stringify(insertError))
         return new Response(
-          JSON.stringify({ error: 'Failed to submit application. Please try again.' }),
+          JSON.stringify({ error: 'Failed to submit application.', details: insertError.message, code: insertError.code }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -487,7 +494,7 @@ serve(async (req) => {
 
     // ─── GET: List applications (admin only) ───────────────────────────────
     if (method === 'GET') {
-      const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+      const { data: { user }, error: userError } = await supabaseAnon.auth.getUser()
       if (userError || !user) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
@@ -525,7 +532,7 @@ serve(async (req) => {
 
     // ─── PATCH: Update application status (admin only) ─────────────────────
     if (method === 'PATCH') {
-      const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+      const { data: { user }, error: userError } = await supabaseAnon.auth.getUser()
       if (userError || !user) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
