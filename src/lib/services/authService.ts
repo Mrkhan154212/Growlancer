@@ -119,7 +119,8 @@ export async function createUserProfile(
   // This works even when the user doesn't have a valid session yet
   // (email confirmation not completed).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: rpcError } = await supabase.rpc('create_user_profile' as any, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rpcData, error: rpcError } = await supabase.rpc('create_user_profile' as any, {
     p_id: userId,
     p_email: email,
     p_name: name,
@@ -128,12 +129,16 @@ export async function createUserProfile(
   });
 
   if (rpcError) {
+    console.error('[Auth] create_user_profile RPC failed:', JSON.stringify(rpcError, null, 2));
     captureError('Failed to create user profile', {
       source: 'auth',
       userId,
+      errorMessage: typeof rpcError === 'object' ? JSON.stringify(rpcError) : String(rpcError),
     });
     return null;
   }
+  
+  console.log('[Auth] create_user_profile RPC success:', JSON.stringify(rpcData));
 
   return fetchUserProfile(userId);
 }
