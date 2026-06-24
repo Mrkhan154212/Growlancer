@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Award, BookOpen, Briefcase, Building, Calendar, CheckCircle, CheckCircle2, ChevronDown, ChevronUp, Clock, Code, Database, PenTool, FileText, Globe, GraduationCap, HelpCircle, Home, Info, Lightbulb, Link2, Loader2, MessageSquare, Palette, Phone, School, Send, Ship, Sparkles, Target, User, Users, View, X,  } from 'lucide-react';
+import { ArrowLeft, Award, BookOpen, Briefcase, Building, Calendar, CheckCircle, CheckCircle2, ChevronDown, ChevronUp, Clock, Code, Database, PenTool, FileText, Globe, GraduationCap, HelpCircle, Home, Info, Lightbulb, Link2, Loader2, MessageSquare, Palette, Phone, School, Send, Ship, Sparkles, Target, Upload, User, Users, View, X,  } from 'lucide-react';
 import { internshipService, INTERNSHIP_ROLES, type InternshipRole } from '../lib/internshipService';
 
 // ─── Icon resolver ───────────────────────────────────────────────────────────
@@ -268,12 +268,17 @@ function ApplicationForm({
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [education, setEducation] = useState('');
-  const [graduationDate, setGraduationDate] = useState('');
+  const [country, setCountry] = useState('');
+  const [university, setUniversity] = useState('');
+  const [degree, setDegree] = useState('');
+  const [graduationYear, setGraduationYear] = useState('');
   const [discordHandle, setDiscordHandle] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [resumeUrl, setResumeUrl] = useState('');
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
   const [whyGrowlancer, setWhyGrowlancer] = useState('');
   const [weeklyAvailability, setWeeklyAvailability] = useState(20);
@@ -291,18 +296,36 @@ function ApplicationForm({
 
     setStep('submitting');
 
+    // Upload resume PDF if selected
+    let resumeFilePath: string | undefined;
+    let resumeFileName: string | undefined;
+    if (resumeFile) {
+      setResumeUploading(true);
+      const uploadResult = await internshipService.uploadResume(resumeFile);
+      setResumeUploading(false);
+      if (uploadResult.success && uploadResult.filePath) {
+        resumeFilePath = uploadResult.filePath;
+        resumeFileName = resumeFile.name;
+      }
+    }
+
     const result = await internshipService.submitApplication({
       full_name: fullName,
       email,
       phone: phone || undefined,
       role_id: role.id,
       role_name: role.name,
-      education: education || undefined,
-      graduation_date: graduationDate || undefined,
+      country: country || undefined,
+      university: university || undefined,
+      degree: degree || undefined,
+      graduation_year: graduationYear || undefined,
+      linkedin_url: linkedinUrl || undefined,
       discord_handle: discordHandle || undefined,
       github_url: githubUrl || undefined,
       portfolio_url: portfolioUrl || undefined,
       resume_url: resumeUrl || undefined,
+      resume_file_path: resumeFilePath,
+      resume_file_name: resumeFileName,
       cover_letter: coverLetter,
       why_growlancer: whyGrowlancer || undefined,
       weekly_availability: weeklyAvailability,
@@ -414,9 +437,9 @@ function ApplicationForm({
                       placeholder="e.g. you@example.com"
                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Phone (optional)</label>
+                  </div>                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Phone (optional)</label>
                     <input
                       type="tel"
                       value={phone}
@@ -426,12 +449,12 @@ function ApplicationForm({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Discord Handle (optional)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Country (optional)</label>
                     <input
                       type="text"
-                      value={discordHandle}
-                      onChange={(e) => setDiscordHandle(e.target.value)}
-                      placeholder="e.g. yourhandle#1234"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      placeholder="e.g. India, USA, UK"
                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
                     />
                   </div>
@@ -446,26 +469,46 @@ function ApplicationForm({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Education Level (optional)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">College / University (optional)</label>
+                    <input
+                      type="text"
+                      value={university}
+                      onChange={(e) => setUniversity(e.target.value)}
+                      placeholder="e.g. MIT, Stanford, Delhi University"
+                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Degree (optional)</label>
+                    <input
+                      type="text"
+                      value={degree}
+                      onChange={(e) => setDegree(e.target.value)}
+                      placeholder="e.g. B.Tech, B.Sc, MCA"
+                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Graduation Year (optional)</label>
                     <select
-                      value={education}
-                      onChange={(e) => setEducation(e.target.value)}
+                      value={graduationYear}
+                      onChange={(e) => setGraduationYear(e.target.value)}
                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
                     >
-                      <option value="">Select...</option>
-                      <option value="High School">High School</option>
-                      <option value="Undergraduate">Undergraduate</option>
-                      <option value="Graduate">Graduate</option>
-                      <option value="Bootcamp">Bootcamp Graduate</option>
-                      <option value="Self-Taught">Self-Taught</option>
+                      <option value="">Select Year</option>
+                      {Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() + i - 2).toString()).map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                      <option value="Alumni">Alumni (Graduated)</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Graduation Date (optional)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Discord Handle (optional)</label>
                     <input
-                      type="month"
-                      value={graduationDate}
-                      onChange={(e) => setGraduationDate(e.target.value)}
+                      type="text"
+                      value={discordHandle}
+                      onChange={(e) => setDiscordHandle(e.target.value)}
+                      placeholder="e.g. yourhandle#1234"
                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
                     />
                   </div>
@@ -479,6 +522,16 @@ function ApplicationForm({
                   Portfolio &amp; Links
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">LinkedIn Profile (optional)</label>
+                    <input
+                      type="url"
+                      value={linkedinUrl}
+                      onChange={(e) => setLinkedinUrl(e.target.value)}
+                      placeholder="https://linkedin.com/in/username"
+                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
+                    />
+                  </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">GitHub Profile (optional)</label>
                     <input
@@ -508,15 +561,67 @@ function ApplicationForm({
                   <FileText className="w-3.5 h-3.5" />
                   Resume
                 </h4>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Resume Link (Google Drive, Dropbox, etc.) — optional</label>
-                  <input
-                    type="url"
-                    value={resumeUrl}
-                    onChange={(e) => setResumeUrl(e.target.value)}
-                    placeholder="https://drive.google.com/your-resume"
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Upload Resume (PDF only, max 10MB)</label>
+                    <div className="flex items-center gap-3">
+                      <label className="flex-1 flex items-center gap-3 px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition-all">
+                        <Upload className="w-5 h-5 text-slate-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-600 font-medium">
+                            {resumeFile ? resumeFile.name : 'Click to upload PDF'}
+                          </p>
+                          {resumeFile && (
+                            <p className="text-[10px] text-slate-400">
+                              {(resumeFile.size / 1024 / 1024).toFixed(1)} MB
+                            </p>
+                          )}
+                        </div>
+                        {resumeFile && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); setResumeFile(null); }}
+                            className="p-1 hover:bg-slate-200 rounded-full transition-colors"
+                          >
+                            <X className="w-4 h-4 text-slate-400" />
+                          </button>
+                        )}
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.type === 'application/pdf') {
+                                setResumeFile(file);
+                              } else {
+                                alert('Only PDF files are accepted.');
+                              }
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-white px-2 text-slate-400">OR</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Resume Link (Google Drive, Dropbox) — optional</label>
+                    <input
+                      type="url"
+                      value={resumeUrl}
+                      onChange={(e) => setResumeUrl(e.target.value)}
+                      placeholder="https://drive.google.com/your-resume"
+                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 

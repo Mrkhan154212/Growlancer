@@ -1,6 +1,7 @@
 /**
  * Internship Service — Pure data-access for internship applications.
- * Handles form submissions from the Internships page to Supabase.
+ * Handles form submissions from the Internships/Careers page to Supabase.
+ * Includes PDF resume upload to Supabase Storage.
  */
 
 import { supabase } from './supabase';
@@ -15,11 +16,15 @@ export interface InternshipApplicationInput {
   phone?: string;
   role_id: string;
   role_name: string;
-  education?: string;
-  graduation_date?: string;
-  discord_handle?: string;
+  country?: string;
+  university?: string;
+  degree?: string;
+  graduation_year?: string;
+  linkedin_url?: string;
   github_url?: string;
   portfolio_url?: string;
+  resume_file_path?: string;
+  resume_file_name?: string;
   resume_url?: string;
   cover_letter: string;
   why_growlancer?: string;
@@ -35,7 +40,6 @@ export interface InternshipApplicationResult {
 
 /**
  * Internship role definitions — single source of truth for all 4 intern roles.
- * Used both by the InternshipsPage and for validation.
  */
 export interface InternshipRole {
   id: string;
@@ -284,6 +288,54 @@ export const INTERNSHIP_ROLES: InternshipRole[] = [
 
 export const internshipService = {
   /**
+   * Upload a resume PDF to Supabase Storage.
+   * Returns the file path if successful.
+   */
+  async uploadResume(file: File): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    try {
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      if (fileExt !== 'pdf') {
+        return { success: false, error: 'Only PDF files are accepted' };
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return { success: false, error: 'File size must be less than 10MB' };
+      }
+
+      const uniqueName = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const filePath = `resumes/${uniqueName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('internship_resumes')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          contentType: 'application/pdf',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Resume upload error:', uploadError);
+        return { success: false, error: uploadError.message };
+      }
+
+      return { success: true, filePath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to upload resume';
+      console.error('Resume upload exception:', err);
+      return { success: false, error: message };
+    }
+  },
+
+  /**
+   * Get a public URL for a resume file.
+   */
+  getResumeUrl(filePath: string): string {
+    const { data } = supabase.storage
+      .from('internship_resumes')
+      .getPublicUrl(filePath);
+    return data.publicUrl;
+  },
+
+  /**
    * Submit an internship application to Supabase.
    */
   async submitApplication(
@@ -296,18 +348,22 @@ export const internshipService = {
         phone: input.phone?.trim() || null,
         role_id: input.role_id,
         role_name: input.role_name,
-        education: input.education || null,
-        graduation_date: input.graduation_date || null,
-        discord_handle: input.discord_handle?.trim() || null,
+        country: input.country?.trim() || null,
+        university: input.university?.trim() || null,
+        degree: input.degree?.trim() || null,
+        graduation_year: input.graduation_year?.trim() || null,
+        linkedin_url: input.linkedin_url?.trim() || null,
         github_url: input.github_url?.trim() || null,
         portfolio_url: input.portfolio_url?.trim() || null,
         resume_url: input.resume_url?.trim() || null,
+        resume_file_path: input.resume_file_path || null,
+        resume_file_name: input.resume_file_name || null,
         cover_letter: input.cover_letter.trim(),
         why_growlancer: input.why_growlancer?.trim() || null,
         weekly_availability: input.weekly_availability || null,
         available_from: input.available_from || null,
         available_to: input.available_to || null,
-        status: 'pending',
+        status: 'applied',
       };
 
       const { error } = await supabase
@@ -328,7 +384,7 @@ export const internshipService = {
   },
 
   /**
-   * Get all applications (admin use only, will be filtered by RLS).
+   * Get all applications (admin use only).
    */
   async getApplications(): Promise<{ success: boolean; applications?: InternshipRow[]; error?: string }> {
     try {

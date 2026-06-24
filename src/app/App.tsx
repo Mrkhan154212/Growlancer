@@ -6,7 +6,7 @@ import { ProtectedRoute } from '../components/ProtectedRoute';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { I18nProvider } from '../lib/i18n';
 import { ToastProvider } from '../components/Toast';
-import { RouteFallback, DashboardFallback, ClientDashboardFallback, AdminDashboardFallback } from '../components/LoadingSkeleton';
+import { RouteFallback } from '../components/LoadingSkeleton';
 
 // Layouts
 const MainLayout = lazy(() => import('@layouts/MainLayout').then(m => ({ default: m.MainLayout })));
@@ -241,6 +241,9 @@ const AdminSubscriptionsPage = lazy(() =>
 const AdminReportsPage = lazy(() =>
   import('@pages/admin/AdminReportsPage').then(m => ({ default: m.AdminReportsPage }))
 );
+const AdminInternshipsPage = lazy(() =>
+  import('@pages/admin/AdminInternshipsPage').then(m => ({ default: m.AdminInternshipsPage }))
+);
 const ClientReferralsPage = lazy(() =>
   import('@pages/ClientReferralsPage').then(m => ({ default: m.ClientReferralsPage }))
 );
@@ -293,6 +296,7 @@ function App() {
                 <Route path="about" element={<AboutPage />} />
                 <Route path="philosophy" element={<PhilosophyPage />} />
                 <Route path="internships" element={<InternshipsPage />} />
+                <Route path="careers" element={<InternshipsPage />} />
                 <Route path="contact" element={<ContactPage />} />
                 <Route path="help-center" element={<HelpCenterPage />} />
                 <Route path="safety" element={<SafetyPage />} />
@@ -423,6 +427,7 @@ function App() {
                 <Route path="disputes" element={<AdminDisputesPage />} />
                 <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
                 <Route path="reports" element={<AdminReportsPage />} />
+                <Route path="internships" element={<AdminInternshipsPage />} />
               </Route>
 
               {/* 404 Fallback */}

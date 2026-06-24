@@ -28,6 +28,7 @@ const sidebarLinks = [
   { id: 'disputes', path: '/admin/disputes', icon: AlertOctagon, label: 'Disputes' },
   { id: 'subscriptions', path: '/admin/subscriptions', icon: Zap, label: 'Subscriptions' },
   { id: 'reports', path: '/admin/reports', icon: BarChart3, label: 'Reports' },
+  { id: 'internships', path: '/admin/internships', icon: Users, label: 'Internships' },
 ];
 
 export function AdminDashboardLayout() {

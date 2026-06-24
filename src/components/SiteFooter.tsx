@@ -36,6 +36,7 @@ export function SiteFooter({ onOpenSignup }: SiteFooterProps) {
               <li><Link to="/about" className="text-slate-700 hover:text-slate-900 transition-colors">About</Link></li>
               <li><Link to="/philosophy" className="text-slate-700 hover:text-slate-900 transition-colors">Philosophy</Link></li>
               <li><Link to="/contact" className="text-slate-700 hover:text-slate-900 transition-colors">Contact</Link></li>
+              <li><Link to="/careers" className="text-slate-700 hover:text-slate-900 transition-colors">Careers</Link></li>
             </ul>
           </div>
 
