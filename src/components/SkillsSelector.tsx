@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Loader2, Search, X, ChevronDown, Check } from 'lucide-react';
 import { useCategories } from '../hooks/useCategories';
 import { useSkills } from '../hooks/useSkills';
@@ -32,16 +32,21 @@ export function SkillsSelector({
   mode = 'client',
 }: SkillsSelectorProps) {
   const { categories, loading: catLoading } = useCategories();
-  const { skills, getSkillsBySubcategory, loading: skillLoading } = useSkills();
+  const { skills, loading: skillLoading } = useSkills();
 
   const [step, setStep] = useState<'category' | 'subcategory' | 'skills'>(selectedCategoryIds.length > 0 ? 'subcategory' : 'category');
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  // Build category ID → name lookup
+  const categoryIdToName = new Map(categories.map(c => [c.id, c.name]));
 
   // Get all subcategories for selected categories
+  const selectedCategoryNames = selectedCategoryIds
+    .map(id => categoryIdToName.get(id))
+    .filter((n): n is string => !!n);
   const availableSubcategories = skills.filter(
-    (s) => selectedCategoryIds.includes(s.category_name || '')
+    (s) => selectedCategoryNames.includes(s.category_name || '')
   );
   const uniqueSubcategories = [...new Set(availableSubcategories.map((s) => s.subcategory_name || ''))].sort();
 
@@ -58,9 +63,9 @@ export function SkillsSelector({
     if (!onCategoriesChange) return;
     const isSelected = selectedCategoryIds.includes(catId);
     if (isSelected) {
-      onCategoriesChange(selectedCategoryIds.filter((id) => id !== catId));
+      handleCategoryChange(selectedCategoryIds.filter((id) => id !== catId));
     } else if (selectedCategoryIds.length < maxCategories) {
-      onCategoriesChange([...selectedCategoryIds, catId]);
+      handleCategoryChange([...selectedCategoryIds, catId]);
     }
   };
 
@@ -85,6 +90,18 @@ export function SkillsSelector({
     const cat = categories.find((c) => c.id === catId);
     if (!cat) return 0;
     return skills.filter((s) => s.category_name === cat.name).length;
+  };
+
+  // Helper to reset selection when category changes
+  const handleCategoryChange = (newCategoryIds: string[]) => {
+    if (onCategoriesChange) {
+      onCategoriesChange(newCategoryIds);
+    }
+    // Reset subcategory/skill selections when category changes
+    if (newCategoryIds.length !== selectedCategoryIds.length) {
+      setSelectedSubcategories([]);
+      if (onSkillsChange) onSkillsChange([]);
+    }
   };
 
   if (catLoading || skillLoading) {

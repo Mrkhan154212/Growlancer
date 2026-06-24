@@ -726,72 +726,74 @@ export function ClientPaymentsPage() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Transaction
-                </th>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredTransactions.map((transaction) => (
-                <tr key={transaction.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
-                        {getSourceIcon(transaction.source)}
-                      </div>
-                      <div>
-                        <p className="font-medium text-slate-900">
-                          {transaction.description || transaction.source}
-                        </p>
-                        {transaction.contract?.project && (
-                          <p className="text-sm text-slate-500">
-                            {transaction.contract.project.title}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      {new Date(transaction.created_at).toLocaleDateString()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 text-xs font-bold uppercase rounded-full ${getStatusColor(
-                        transaction.status
-                      )}`}
-                    >
-                      {transaction.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span
-                      className={`font-bold ${
-                        transaction.type === 'credit' ? 'text-emerald-600' : 'text-slate-900'
-                      }`}
-                    >
-                      {formatAmount(transaction.amount, transaction.type)}
-                    </span>
-                  </td>
+        <div className="bg-white rounded-2xl border border-slate-100">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Transaction
+                  </th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Amount
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredTransactions.map((transaction) => (
+                  <tr key={transaction.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                          {getSourceIcon(transaction.source)}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900">
+                            {transaction.description || transaction.source}
+                          </p>
+                          {transaction.contract?.project && (
+                            <p className="text-sm text-slate-500">
+                              {transaction.contract.project.title}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4" />
+                        {new Date(transaction.created_at).toLocaleDateString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`px-3 py-1 text-xs font-bold uppercase rounded-full ${getStatusColor(
+                          transaction.status
+                        )}`}
+                      >
+                        {transaction.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span
+                        className={`font-bold ${
+                          transaction.type === 'credit' ? 'text-emerald-600' : 'text-slate-900'
+                        }`}
+                      >
+                        {formatAmount(transaction.amount, transaction.type)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,5 @@
 import { supabase } from './supabase';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-
 export interface AIMatch {
   id: string;
   project_id: string;
@@ -57,8 +55,8 @@ export interface AIMatchWithProject extends AIMatch {
   };
 }
 
-// Client-side AI Matchmaking Engine — matches freelancers to projects by skills
-async function runClientSideFallback(projectId: string): Promise<{ success: boolean; matches?: AIMatch[]; error?: string }> {
+// Skill-Based Matchmaking Engine — matches freelancers to projects by skills
+async function runSkillBasedMatching(projectId: string): Promise<{ success: boolean; matches?: AIMatch[]; error?: string }> {
   try {
     if (import.meta.env.DEV) console.log('[aiMatching] Running Skill-Based Matchmaking for Project:', projectId);
     
@@ -150,7 +148,6 @@ async function runClientSideFallback(projectId: string): Promise<{ success: bool
       // Compare hourly rate against project's implied hourly budget
       // Assume 40hr/week for ~2 weeks = 80hrs total for budget estimation
       const hourlyRate = fp.hourly_rate || 0;
-      const budgetMin = project.budget_min || 0;
       const budgetMax = project.budget_max || 999;
       
       // Estimate implicit hourly budget: budget_max / 80 (2 weeks of work)
@@ -228,41 +225,14 @@ async function runClientSideFallback(projectId: string): Promise<{ success: bool
 }
 
 export const aiMatchingService = {
-  // Generate AI matches for a project
+  // Generate AI matches for a project — uses direct skill-based matching (no edge function)
   async generateMatches(projectId: string): Promise<{ success: boolean; matches?: AIMatch[]; error?: string }> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/ai-matching`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ project_id: projectId }),
-        }
-      );
-
-      if (!response.ok) {
-        console.warn('[aiMatching] Edge function returned error status. Triggering Client-Side AI Fallback Matchmaker.');
-        return await runClientSideFallback(projectId);
-      }
-
-      const data = await response.json();
-      return { success: true, matches: data.matches };
-    } catch (error) {
-      console.warn('[aiMatching] Edge function failed with exception. Triggering Client-Side AI Fallback Matchmaker.', error);
-      return await runClientSideFallback(projectId);
-    }
+    // Direct call to client-side fallback — reliable, skill-based matching
+    return await runSkillBasedMatching(projectId);
   },
 
   // Get AI matches for a project with freelancer profiles
+  // NOTE: After generating new matches, old data is replaced so only REAL matches show
   async getProjectMatches(projectId: string): Promise<AIMatchWithProfile[]> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -292,7 +262,7 @@ export const aiMatchingService = {
         `)
         .eq('project_id', projectId)
         .order('match_score', { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (error) {
         console.error('[aiMatching] Error fetching matches:', error);

@@ -10,8 +10,7 @@ const RAZORPAY_KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET') || '';
 const RAZORPAY_API_URL = 'https://api.razorpay.com/v1';
 
 const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:3000',
+  'https://growlancer.vercel.app',
   'https://growlancer.com',
   'https://www.growlancer.com',
 ];

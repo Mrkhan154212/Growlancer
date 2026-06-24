@@ -174,7 +174,7 @@ async function main() {
     console.log('   Email: test-client-demo@growlancer.test');
     console.log('   Password: DemoTest123!');
     console.log('   ID:', client.userId);
-    console.log('\n🔗 Login URL: http://localhost:5173/?modal=login');
+    console.log('\n🔗 Login URL: https://growlancer.vercel.app/?modal=login');
     console.log('========================================\n');
 
   } catch (error) {

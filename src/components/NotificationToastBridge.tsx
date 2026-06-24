@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { notificationService, type NotificationWithMeta } from '../lib/notifications';
+import { notificationService } from '../lib/notifications';
 import { useToast } from './Toast';
 
 /**

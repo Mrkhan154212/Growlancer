@@ -5,7 +5,6 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle,
   Banknote,
-  Check,
   CheckCircle,
   ChevronRight,
   DollarSign,

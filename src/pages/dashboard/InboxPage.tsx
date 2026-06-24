@@ -155,7 +155,7 @@ export function InboxPage() {
 
       <div className="flex-1 flex bg-white rounded-2xl border border-slate-100 overflow-hidden min-h-0 shadow-sm">
         {/* Conversations List */}
-        <div className="w-80 lg:w-96 border-r border-slate-100 flex flex-col flex-shrink-0">
+        <div className={`${selectedContractId ? 'hidden sm:flex' : 'flex'} w-full sm:w-72 md:w-80 lg:w-96 border-r border-slate-100 flex-col flex-shrink-0`}>
           {/* Search */}
           <div className="p-3 border-b border-slate-100">
             <div className="relative">

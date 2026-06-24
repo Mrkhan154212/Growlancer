@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { aiMatchingService, type AIMatchWithProfile } from '../lib/aiMatching';
 import { realtimeChannels, supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { inviteFreelancerToProject } from '../lib/workflowService';
-import { Badge, CheckCircle2, DollarSign, Info, MapPin, RefreshCw, Send, Sparkles, Star, User, XCircle,  } from 'lucide-react';
+import { CheckCircle2, DollarSign, MapPin, RefreshCw, Send, Sparkles, Star, User, XCircle, Plus, Briefcase, ArrowRight, Loader2 } from 'lucide-react';
 
 export function ClientMatchesPage() {
   const { user } = useAuth();
@@ -17,18 +17,65 @@ export function ClientMatchesPage() {
   const [inviteBusy, setInviteBusy] = useState<string | null>(null);
   const [invitedFreelancers, setInvitedFreelancers] = useState<Set<string>>(new Set());
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
-  const [clientProjects, setClientProjects] = useState<{ id: string; title: string }[]>([]);
+  const [clientProjects, setClientProjects] = useState<{ id: string; title: string; skills_required: string[] }[]>([]);
+  const [currentProject, setCurrentProject] = useState<{ id: string; title: string; skills_required: string[] } | null>(null);
+  const initializedProjects = useRef<Set<string>>(new Set());
 
+  // Fetch all client projects + current project details
   useEffect(() => {
-    if (!user?.id || projectId) return;
-    void supabase
-      .from('projects')
-      .select('id, title')
-      .eq('client_id', user.id)
-      .eq('status', 'open')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => setClientProjects(data || []));
+    if (!user?.id) return;
+
+    const fetchProjects = async () => {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, title, skills_required')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false });
+
+      setClientProjects(data || []);
+
+      // If projectId is set, find current project
+      if (projectId && data) {
+        const found = data.find(p => p.id === projectId);
+        setCurrentProject(found || null);
+      } else {
+        setCurrentProject(null);
+      }
+    };
+
+    fetchProjects();
   }, [user?.id, projectId]);
+
+  // Auto-generate matches once per project (tracks initialized IDs via ref)
+  useEffect(() => {
+    if (!projectId) return;
+    if (initializedProjects.current.has(projectId)) return;
+    
+    initializedProjects.current.add(projectId);
+    
+    const autoGenerate = async () => {
+      setLoading(true);
+      
+      // Check if any matches exist
+      const { data: existingMatches } = await supabase
+        .from('ai_matches')
+        .select('id')
+        .eq('project_id', projectId)
+        .limit(1);
+      
+      // Only generate if NO matches exist yet
+      if (!existingMatches || existingMatches.length === 0) {
+        await aiMatchingService.generateMatches(projectId);
+      }
+      
+      // Fetch matches regardless
+      const data = await aiMatchingService.getProjectMatches(projectId);
+      setMatches(data);
+      setLoading(false);
+    };
+    
+    autoGenerate();
+  }, [projectId]);
 
   const fetchMatches = useCallback(async () => {
     if (!projectId) return;
@@ -39,13 +86,7 @@ export function ClientMatchesPage() {
     setLoading(false);
   }, [projectId]);
 
-  useEffect(() => {
-    if (projectId) {
-      fetchMatches();
-    }
-  }, [projectId, fetchMatches]);
-
-  /** Live list when AI matches are inserted/updated for this project (edge function or batch job). */
+  // Live list when AI matches are inserted/updated for this project
   useEffect(() => {
     if (!projectId) return;
 
@@ -71,7 +112,7 @@ export function ClientMatchesPage() {
         .from('invites')
         .select('freelancer_id')
         .eq('project_id', projectId);
-      
+
       if (data) {
         setInvitedFreelancers(new Set(data.map(i => i.freelancer_id)));
       }
@@ -105,10 +146,9 @@ export function ClientMatchesPage() {
     if (!projectId) return;
 
     setGenerating(true);
-    // Reset skipped matches on regenerate so all new matches are visible
-    setSkipped(new Set());
+    setSkipped(new Set()); // Reset skipped
     const result = await aiMatchingService.generateMatches(projectId);
-    
+
     if (result.success) {
       await fetchMatches();
     }
@@ -130,75 +170,184 @@ export function ClientMatchesPage() {
 
   const visibleMatches = matches.filter((m) => !skipped.has(m.freelancer_id));
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+  // CASE 1: User has NO projects at all
+  if (!loading && clientProjects.length === 0 && !projectId) {
+    return (
+      <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-900">AI Talent Matches</h1>
           <p className="text-slate-500 mt-1">
-            AI-powered recommendations based on your project requirements
+            Get AI-powered freelancer recommendations based on your project requirements
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleGenerateMatches}
-            disabled={generating || !projectId}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-            {generating ? 'Generating...' : 'Regenerate Matches'}
-          </button>
-          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl">
-            <Sparkles className="w-5 h-5" />
-            <span className="font-bold">
-              {visibleMatches.length}/{matches.length} Matches
-            </span>
+
+        <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm">
+          <div className="h-20 w-20 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+            <Briefcase className="w-10 h-10 text-emerald-600" />
           </div>
+          <h3 className="font-display text-xl font-bold text-slate-900 mb-2">No Projects Yet</h3>
+          <p className="text-slate-500 mb-8 max-w-md mx-auto">
+            Create your first project with the skills you need, and our AI will find the perfect freelancers for you.
+          </p>
+          <Link
+            to="/client/post"
+            className="inline-flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/25"
+          >
+            <Plus className="w-5 h-5" />
+            Create Your First Project
+            <ArrowRight className="w-5 h-5" />
+          </Link>
         </div>
       </div>
+    );
+  }
 
-      {!projectId && (
-        <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-200">
-          <Sparkles className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">Select a project</h3>
-          <p className="text-slate-500 mb-4">Choose an open project to view AI talent matches</p>
+  // CASE 2: User has projects but NO project selected
+  if (!projectId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-slate-900">AI Talent Matches</h1>
+          <p className="text-slate-500 mt-1">
+            Select a project to view AI-powered freelancer recommendations
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h3 className="font-display font-bold text-slate-900 mb-4">Your Projects</h3>
           {clientProjects.length > 0 ? (
-            <div className="flex flex-col gap-2 max-w-md mx-auto">
+            <div className="grid gap-3">
               {clientProjects.map((p) => (
                 <Link
                   key={p.id}
                   to={`/client/matches?project_id=${p.id}`}
-                  className="px-4 py-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-400 text-left font-medium text-slate-800"
+                  className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all group"
                 >
-                  {p.title}
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                      <Briefcase className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-slate-900">{p.title}</p>
+                      <p className="text-xs text-slate-400">
+                        {p.skills_required?.length || 0} skills • Click to view matches
+                      </p>
+                    </div>
+                  </div>
+                  <Sparkles className="w-5 h-5 text-slate-300 group-hover:text-emerald-500 transition-colors" />
                 </Link>
               ))}
             </div>
           ) : (
-            <Link to="/client/post" className="inline-flex px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl">
-              Post a project first
-            </Link>
+            <div className="text-center py-8">
+              <p className="text-slate-500 mb-4">No projects found</p>
+              <Link
+                to="/client/post"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Post a New Project
+              </Link>
+            </div>
           )}
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {projectId && matches.length === 0 && !loading ? (
-        <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-200">
-          <Sparkles className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">No matches found</h3>
-          <p className="text-slate-500 mb-4">
-            Generate AI matches to see recommended freelancers for this project
+  // CASE 3: Project selected — show matches
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Link
+              to="/client/matches"
+              className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              ← All Projects
+            </Link>
+          </div>
+          <h1 className="font-display text-2xl font-bold text-slate-900">
+            {currentProject?.title || 'AI Talent Matches'}
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            {currentProject?.skills_required?.length 
+              ? `Matching freelancers by: ${currentProject.skills_required.join(', ')}`
+              : 'No skills set — edit project to add skills for better matches'}
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/client/post?edit=${projectId}`}
+            className="px-4 py-2 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors text-sm"
+          >
+            Edit Project
+          </Link>
           <button
             onClick={handleGenerateMatches}
             disabled={generating}
-            className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
           >
-            {generating ? 'Generating...' : 'Generate Matches'}
+            <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+            {generating ? 'Matching...' : 'Generate Matches'}
           </button>
+          {matches.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm">
+              <Sparkles className="w-4 h-4" />
+              <span className="font-bold">{visibleMatches.length} Matches</span>
+            </div>
+          )}
         </div>
-      ) : projectId && visibleMatches.length > 0 ? (
+      </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Finding the best freelancers for your project...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State — No matches generated yet */}
+      {!loading && matches.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
+          <Sparkles className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+          <h3 className="font-display text-lg font-bold text-slate-900 mb-2">No Matches Found</h3>
+          <p className="text-slate-500 mb-2 max-w-md mx-auto">
+            {currentProject?.skills_required?.length 
+              ? 'No freelancers match your project skills yet. Try adding more skills or adjusting your requirements.'
+              : 'Add skills to your project first so our AI can find matching freelancers.'}
+          </p>
+          {currentProject?.skills_required?.length ? (
+            <p className="text-xs text-slate-400 mb-6">
+              Searching for: {currentProject.skills_required.join(', ')}
+            </p>
+          ) : null}
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={handleGenerateMatches}
+              disabled={generating}
+              className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {generating ? 'Generating...' : 'Generate Matches'}
+            </button>
+            <Link
+              to={`/client/post?edit=${projectId}`}
+              className="px-6 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              Edit Project Skills
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Match Cards */}
+      {!loading && visibleMatches.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {visibleMatches.map((match) => (
             <div
@@ -207,9 +356,9 @@ export function ClientMatchesPage() {
             >
               {/* Match Score Badge */}
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-bold">
                   <Sparkles className="w-4 h-4" />
-                  <span className="font-bold">{match.match_score}% Match</span>
+                  {match.match_score}% Match
                 </div>
               </div>
 
@@ -301,18 +450,6 @@ export function ClientMatchesPage() {
                     <span className="font-medium text-slate-700">{match.budget_score}</span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Completion</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-orange-500 rounded-full" 
-                        style={{ width: `${match.completion_score}%` }}
-                      />
-                    </div>
-                    <span className="font-medium text-slate-700">{match.completion_score}</span>
-                  </div>
-                </div>
               </div>
 
               {/* Actions */}
@@ -349,12 +486,15 @@ export function ClientMatchesPage() {
             </div>
           ))}
         </div>
-      ) : projectId && visibleMatches.length === 0 && matches.length > 0 ? (
-        <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-200">
+      )}
+
+      {/* All Skipped */}
+      {!loading && visibleMatches.length === 0 && matches.length > 0 && (
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
           <XCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">All matches skipped</h3>
+          <h3 className="font-display text-lg font-medium text-slate-900 mb-2">All matches skipped</h3>
           <p className="text-slate-500 mb-4">
-            You have skipped all {matches.length} freelancer match{matches.length !== 1 ? 'es' : ''}. Regenerate to see new matches.
+            You've skipped all {matches.length} match{matches.length !== 1 ? 'es' : ''}. Regenerate to find new freelancers.
           </p>
           <div className="flex gap-3 justify-center">
             <button
@@ -372,7 +512,7 @@ export function ClientMatchesPage() {
             </button>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

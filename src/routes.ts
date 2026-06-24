@@ -7,6 +7,7 @@ export const ROUTES = {
   LOGIN: '/login',
   SIGNUP: '/signup',
   INTERNSHIPS: '/internships',
+  CAREERS: '/careers',
   
   // Marketplace Browse (public)
   FREELANCERS: '/freelancers',
@@ -145,6 +146,7 @@ export const NAVIGATION = {
     { label: 'About', path: ROUTES.ABOUT },
     { label: 'Philosophy', path: ROUTES.PHILOSOPHY },
     { label: 'Contact', path: ROUTES.CONTACT },
+    { label: 'Careers', path: ROUTES.CAREERS },
   ],
   support: [
     { label: 'Help center', path: ROUTES.HELP_CENTER },

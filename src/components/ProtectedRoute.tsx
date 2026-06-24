@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -13,8 +13,6 @@ interface ProtectedRouteProps {
 /** Fields required for profile completion gating */
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, role, getDashboardRoute, user } = useAuth();
-  const location = useLocation();
-  const [serverRoleVerified, setServerRoleVerified] = useState(false);
   const [serverRole, setServerRole] = useState<UserRole | null>(null);
   const [verifying, setVerifying] = useState(true);
 
@@ -52,7 +50,6 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
             source: 'auth', userId: user.id, message: profileError.message,
           });
           setServerRole(role);
-          setServerRoleVerified(false);
         } else if (profileResult) {
           const dbRole = profileResult.role as UserRole;
           setServerRole(dbRole);
@@ -61,7 +58,6 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
               clientRole: role, serverRole: dbRole, userId: user.id,
             });
           }
-          setServerRoleVerified(dbRole === role);
         }
       } catch (err) {
         if (!cancelled) {
@@ -70,7 +66,6 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
             error: err instanceof Error ? err.message : String(err),
           });
           setServerRole(role);
-          setServerRoleVerified(false);
         }
       } finally {
         if (!cancelled) setVerifying(false);

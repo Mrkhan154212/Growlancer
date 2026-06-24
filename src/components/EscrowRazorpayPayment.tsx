@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Shield, DollarSign, AlertCircle, Loader2, CheckCircle, ListChecks, ChevronRight, Banknote } from 'lucide-react';
+import { Shield, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { supabase } from '../lib/supabase';
 import { PLATFORM_CONFIG, calculatePlatformFee, calculateTotalWithFee } from '../lib/config';
-import { milestoneService, getMilestoneProgress } from '../lib/contractMilestones';
+import { milestoneService } from '../lib/contractMilestones';
 import type { MilestoneItem } from '../lib/contractMilestones';
 
 interface EscrowRazorpayPaymentProps {
@@ -58,7 +58,7 @@ export function EscrowRazorpayPayment({
   const [step, setStep] = useState<PaymentStep>(propMilestones && propMilestones.length > 0 ? 'select_milestones' : 'review');
   const [error, setError] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<MilestoneItem[]>(propMilestones || []);
-  const [selectedMilestones, setSelectedMilestones] = useState<Set<number>>(new Set());
+  const selectedMilestones: Set<number> = new Set();
 
   useEffect(() => {
     if (!propMilestones || propMilestones.length === 0) {
@@ -88,15 +88,6 @@ export function EscrowRazorpayPayment({
   const fundedAmount = milestones
     .filter((m) => ['completed', 'approved', 'released', 'paid'].includes(String(m.status || '').toLowerCase()))
     .reduce((sum, m) => sum + (Number(m.amount) || 0), 0);
-
-  const toggleMilestoneSelection = (index: number) => {
-    setSelectedMilestones((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
 
   const handleRazorpaySuccess = async () => {
     setStep('processing');

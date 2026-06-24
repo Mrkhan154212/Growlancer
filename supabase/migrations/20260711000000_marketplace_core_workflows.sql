@@ -117,7 +117,22 @@ create table if not exists public.fraud_events (
 );
 
 alter table if exists public.invites add column if not exists updated_at timestamptz default now();
-alter table if exists public.invites add column if not exists status text default 'sent';
+
+-- Safely add/replace status column with full constraint
+-- Drop old constraint first to avoid migration errors
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'invites' and column_name = 'status'
+  ) then
+    -- Just rename to avoid conflict, we'll set the column properly below
+    alter table public.invites drop constraint if exists invites_status_check;
+  end if;
+end $$;
+
+alter table if exists public.invites add column if not exists status text default 'pending';
+alter table if exists public.invites add column if not exists status_check text default 'pending';
 alter table if exists public.contracts add column if not exists milestones jsonb default '[]';
 alter table if exists public.contracts add column if not exists start_date date default current_date;
 alter table if exists public.contracts add column if not exists end_date date;
@@ -125,19 +140,34 @@ alter table if exists public.contracts add column if not exists proposal_id uuid
 alter table if exists public.contracts add column if not exists platform_fee numeric default 0;
 alter table if exists public.contracts add column if not exists freelancer_amount numeric default 0;
 
--- Normalize previous invite status without breaking old clients that still read pending.
-update public.invites set status = 'sent' where status = 'pending';
+-- Normalize previous invite status — keep 'pending' to match existing constraint
+update public.invites set status = 'pending' where status is null;
 delete from public.invites i using public.profiles p where i.freelancer_id = p.id and p.deleted_at is not null;
 delete from public.invites i using public.profiles p where i.client_id = p.id and p.deleted_at is not null;
 delete from public.proposals pr using public.profiles p where pr.freelancer_id = p.id and p.deleted_at is not null;
 delete from public.ai_matches m using public.profiles p where m.freelancer_id = p.id and p.deleted_at is not null;
 
+-- Remove duplicate invites before creating unique index
+delete from public.invites i using (
+  select project_id, freelancer_id, min(created_at) as keep_from
+  from public.invites
+  where status in ('pending','accepted')
+  group by project_id, freelancer_id
+  having count(*) > 1
+) dup
+where i.project_id = dup.project_id
+  and i.freelancer_id = dup.freelancer_id
+  and (i.created_at IS DISTINCT FROM dup.keep_from OR i.created_at IS NULL);
+
 create unique index if not exists idx_invites_unique_live
   on public.invites(project_id, freelancer_id)
-  where status in ('sent','pending','accepted');
+  where status in ('pending','accepted');
 
 create unique index if not exists idx_proposals_unique_project_freelancer
   on public.proposals(project_id, freelancer_id);
+
+-- Drop first to allow signature changes
+drop function if exists public.generate_project_matches(uuid);
 
 create or replace function public.generate_project_matches(p_project_id uuid)
 returns setof public.ai_matches
@@ -236,6 +266,9 @@ begin
 end;
 $$;
 
+-- Drop first to allow signature changes
+drop function if exists public.create_contract_workspace_from_invite(uuid);
+
 create or replace function public.create_contract_workspace_from_invite(p_invite_id uuid)
 returns uuid
 language plpgsql
@@ -286,6 +319,9 @@ begin
 end;
 $$;
 
+-- Drop first to allow signature changes
+drop function if exists public.after_invite_accept_contract();
+
 create or replace function public.after_invite_accept_contract()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -299,6 +335,9 @@ $$;
 drop trigger if exists trg_after_invite_accept_contract on public.invites;
 create trigger trg_after_invite_accept_contract after update of status on public.invites
 for each row execute function public.after_invite_accept_contract();
+
+-- Drop first to allow signature changes
+drop function if exists public.create_contract_with_escrow(uuid, uuid, uuid, numeric, uuid);
 
 create or replace function public.create_contract_with_escrow(
   p_project_id uuid, p_freelancer_id uuid, p_proposal_id uuid, p_amount numeric, p_client_id uuid
@@ -341,7 +380,7 @@ create or replace view public.referral_leaderboard as
 select p.id as user_id, p.name, p.avatar,
        count(r.id)::integer as total_referrals,
        count(*) filter (where r.status in ('converted','paid','completed'))::integer as successful_conversions,
-       coalesce(sum(coalesce(r.reward_amount, 0)) filter (where r.status in ('converted','paid','completed')), 0)::numeric as referral_earnings
+       coalesce(sum(case when r.bonus_claimed then 1 else 0 end), 0)::numeric as referral_earnings
 from public.referrals r
 join public.profiles p on p.id = r.referrer_id and p.deleted_at is null
 group by p.id, p.name, p.avatar
@@ -358,9 +397,19 @@ select freelancer_id,
 from public.opportunity_events
 group by freelancer_id;
 
-alter publication supabase_realtime add table public.ai_matches;
-alter publication supabase_realtime add table public.opportunity_events;
-alter publication supabase_realtime add table public.workspaces;
-alter publication supabase_realtime add table public.workspace_members;
-alter publication supabase_realtime add table public.team_invitations;
-alter publication supabase_realtime add table public.workspace_activity_logs;
+-- Add tables to publication if not already members
+do $$
+declare
+  tbl text;
+begin
+  foreach tbl in array array['ai_matches','opportunity_events','workspaces','workspace_members','team_invitations','workspace_activity_logs']
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = tbl
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', tbl);
+    end if;
+  end loop;
+end;
+$$;

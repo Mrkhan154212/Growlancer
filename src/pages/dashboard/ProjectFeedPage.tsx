@@ -202,6 +202,14 @@ export function ProjectFeedPage() {
   const [freelancerRate, setFreelancerRate] = useState<number | null>(null);
   const [hasProfile, setHasProfile] = useState<boolean>(true);
   const [appliedProjects, setAppliedProjects] = useState<Set<string>>(new Set());
+  const [declinedProjects, setDeclinedProjects] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('gw_declined_projects');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -246,8 +254,15 @@ export function ProjectFeedPage() {
         }
 
         if (matchesData) {
-          setMatches(matchesData as unknown as MatchWithProject[]);
-          setFilteredMatches(matchesData as unknown as MatchWithProject[]);
+          const rawMatches = matchesData as unknown as MatchWithProject[];
+          // Filter out declined projects and only show REAL skill-based matches
+          const realMatches = rawMatches.filter(m => 
+            !declinedProjects.has(m.project_id) && 
+            (m.skill_score ?? 0) >= 50 &&
+            (m.match_score ?? 0) >= 40
+          );
+          setMatches(realMatches);
+          setFilteredMatches(realMatches);
         }
 
         // Fetch proposals
@@ -458,8 +473,15 @@ export function ProjectFeedPage() {
     }
   };
 
-  const handleDecline = async (matchId: string) => {
+  const handleDecline = async (matchId: string, projectIdFromMatch: string) => {
     try {
+      // Store declined project ID in localStorage so it persists across refreshes
+      const newDeclined = new Set(declinedProjects);
+      newDeclined.add(projectIdFromMatch);
+      setDeclinedProjects(newDeclined);
+      localStorage.setItem('gw_declined_projects', JSON.stringify([...newDeclined]));
+
+      // Optionally delete from DB
       await supabase
         .from('ai_matches')
         .delete()
@@ -497,7 +519,9 @@ export function ProjectFeedPage() {
           <div>
             <h1 className="font-display text-2xl font-bold text-slate-900">AI Project Feed</h1>
             <p className="text-slate-500">
-              {matches.length} projects matched to your skills
+              {skills.length > 0 
+                ? `${matches.length} projects matched to your ${skills.length} skills` 
+                : 'Complete your profile to get AI-matched projects'}
             </p>
           </div>
         </div>
@@ -661,10 +685,8 @@ export function ProjectFeedPage() {
                     <span className="font-medium text-slate-700">
                       {match.project.client?.name || 'Anonymous Client'}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                      4.9
-                    </span>
+                    {/* Show real client metric or nothing — no fake rating */}
+                  
                   </div>
                 </div>
 
@@ -688,7 +710,7 @@ export function ProjectFeedPage() {
                     </button>
                   )}
                   <button
-                    onClick={() => handleDecline(match.id)}
+                    onClick={() => handleDecline(match.id, match.project_id)}
                     className="px-6 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-colors"
                   >
                     Not Interested

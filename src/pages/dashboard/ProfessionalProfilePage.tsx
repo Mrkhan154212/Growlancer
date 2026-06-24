@@ -9,6 +9,8 @@ import { withdrawalService } from '../../lib/withdrawal';
 import { useToast } from '../../components/Toast';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import {AlertCircle, AlertTriangle, ArrowLeft, Bell, Briefcase, Calendar, Camera, Check, CheckCircle2, ChevronRight, Globe, Clock, Code, Computer, Contact, Copy, CreditCard, Delete, DollarSign, Download, Edit, Edit2, Eye, EyeOff, Info, Key, Languages, Loader2, Lock, LogOut, Mail, MapPin, Monitor, Navigation, Network, Phone, Plus, QrCode, RefreshCw, Save, Scan, Search, Settings, Shield, Star, Trash2, Type, User, View, X, XCircle, } from 'lucide-react';
+import { useSkills } from '../../hooks/useSkills';
+import { SkillsSelector } from '../../components/SkillsSelector';
 import type { Tables } from '../../types/supabase';
 import type { PayoutMethod } from '../../lib/withdrawal';
 
@@ -139,6 +141,9 @@ export function ProfessionalProfilePage() {
   const [deletionStep, setDeletionStep] = useState<'initial' | 'confirm' | 'processing'>('initial');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
+  // ── SkillsSelector state ──
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const { skills: allSkills } = useSkills();
   // ── Input states ──
   const [skillInput, setSkillInput] = useState('');
   const [languageInput, setLanguageInput] = useState('');
@@ -181,13 +186,14 @@ export function ProfessionalProfilePage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const f = freelancerResp.data as any;
         setFreelancerProfile(f as FreelancerProfile);
-        setFormData({
+        const existingSkills: string[] = f.skills || [];
+      setFormData({
           name: profileResp.data?.name || '',
           title: f.title || '',
           bio: f.bio || '',
           hourly_rate: f.hourly_rate || 0,
           experience: f.experience || 0,
-          skills: f.skills || [],
+          skills: existingSkills,
           languages: f.languages || [],
           location: f.location || '',
           portfolio_url: f.portfolio_url || '',
@@ -430,7 +436,28 @@ export function ProfessionalProfilePage() {
     finally { setSaving(false); }
   };
 
+  // ── Sync SkillsSelector selections to formData.skills ──
+  useEffect(() => {
+    if (selectedSkillIds.length > 0) {
+      // Add new skills from SkillsSelector
+      const skillNames = selectedSkillIds
+        .map(id => allSkills.find(s => s.id === id))
+        .filter((s): s is NonNullable<typeof s> => !!s)
+        .map(s => s.name)
+        .filter(name => !formData.skills.includes(name)); // avoid duplicates
+      if (skillNames.length > 0) {
+        setFormData(prev => ({ ...prev, skills: [...prev.skills, ...skillNames] }));
+      }
+    }
+    // Note: when all skills are deselected in SkillsSelector, previously synced
+    // skills remain in formData.skills. User can remove them via the free-text section.
+  }, [selectedSkillIds]);
+
   // ── Skill/Language/Cert helpers ──
+  // Map skill IDs to names when SkillsSelector changes
+  const handleSkillsChange = (skillIds: string[]) => {
+    setSelectedSkillIds(skillIds);
+  };
   const addSkill = () => { if (skillInput.trim() && !formData.skills.includes(skillInput.trim())) { setFormData({ ...formData, skills: [...formData.skills, skillInput.trim()] }); setSkillInput(''); } };
   const removeSkill = (s: string) => setFormData({ ...formData, skills: formData.skills.filter(x => x !== s) });
   const addLanguage = () => { if (languageInput.trim() && !formData.languages.includes(languageInput.trim())) { setFormData({ ...formData, languages: [...formData.languages, languageInput.trim()] }); setLanguageInput(''); } };
@@ -804,9 +831,25 @@ export function ProfessionalProfilePage() {
                     </div>
                   </div>
 
-                  {/* Skills */}
+                  {/* Skills — Hierarchy Selector + Free-text */}
                   <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                     <h3 className="font-display text-lg font-bold text-slate-900 mb-4">Skills</h3>
+                    
+                    {/* Category → Subcategory → Skills Selector */}
+                    <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                      <p className="text-xs text-slate-500 mb-3">Select skills from the hierarchy to get better AI-matched projects</p>
+                      <SkillsSelector
+                        mode="freelancer"
+                        maxSkills={15}
+                        maxCategories={3}
+                        selectedCategoryIds={[]}
+                        selectedSkillIds={selectedSkillIds}
+                        onSkillsChange={handleSkillsChange}
+                        onCategoriesChange={() => {}}
+                      />
+                    </div>
+
+                    {/* Free-text skill input (legacy support) */}
                     <div className="flex gap-2 mb-3">
                       <input type="text" value={skillInput} onChange={(e) => setSkillInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                         className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all" placeholder="e.g., React, Node.js, Python" />
@@ -923,7 +966,7 @@ export function ProfessionalProfilePage() {
                     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                       <h3 className="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wider text-slate-500">Skills</h3>
                       <div className="flex flex-wrap gap-2">
-                        {formData.skills.length > 0 ? formData.skills.map(s => <span key={s} className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-sm">{s}</span>) : <p className="text-slate-400">No skills added</p>}
+                        {formData.skills.length > 0 ? [...formData.skills].sort((a, b) => a.localeCompare(b)).map(s => <span key={s} className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-sm">{s}</span>) : <p className="text-slate-400">No skills added</p>}
                       </div>
                       {formData.skills.length === 0 && (
                         <p className="text-xs text-slate-400 mt-2">Add skills to get better AI project matches</p>

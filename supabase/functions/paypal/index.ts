@@ -14,8 +14,7 @@ const PAYPAL_API_URL =
 
 // CORS headers - restricted to allowed origins
 const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:3000',
+  'https://growlancer.vercel.app',
   'https://growlancer.com',
   'https://www.growlancer.com',
 ];
@@ -311,8 +310,8 @@ serve(async req => {
               brand_name: 'Growlancer',
               landing_page: 'LOGIN',
               user_action: 'PAY_NOW',
-              return_url: `${Deno.env.get('APP_URL') || 'http://localhost:5173'}/payment/success`,
-              cancel_url: `${Deno.env.get('APP_URL') || 'http://localhost:5173'}/payment/cancel`,
+              return_url: `${Deno.env.get('APP_URL') || 'https://growlancer.vercel.app'}/payment/success`,
+              cancel_url: `${Deno.env.get('APP_URL') || 'https://growlancer.vercel.app'}/payment/cancel`,
             },
           },
           accessToken

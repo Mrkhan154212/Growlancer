@@ -24,13 +24,13 @@ export function MainLayout() {
 
     if (modal === 'login') {
       setIsLoginModalOpen(true);
-      // Remove param from URL
-      navigate(location.pathname, { replace: true });
+      // Clean URL params without triggering React Router navigation (prevents race conditions with lazy-loaded components)
+      window.history.replaceState(null, '', location.pathname);
     } else if (modal === 'signup') {
       if (roleParam) setSignupRole(roleParam);
       setIsSignupModalOpen(true);
-      // Remove param from URL
-      navigate(location.pathname, { replace: true });
+      // Clean URL params without triggering React Router navigation
+      window.history.replaceState(null, '', location.pathname);
     }
   }, [location.search, location.pathname, navigate]);
 

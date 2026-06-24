@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Check,
+import {
   CheckCircle,
   CreditCard,
   Loader2,
-  User,
-  XCircle } from 'lucide-react';
+  XCircle,
+} from 'lucide-react';
 import { paypalService, PayPalOrderRequest } from '../lib/paypal';
 
 interface PayPalCheckoutProps {

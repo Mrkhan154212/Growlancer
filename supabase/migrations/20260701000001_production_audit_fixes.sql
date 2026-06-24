@@ -10,9 +10,9 @@ ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS suspended_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ DEFAULT NULL;
 
--- 2. RAZORPAY ORDERS TABLE
+-- 2. RAZORPAY ORDERS TABLE (skip if already exists from earlier migration)
 CREATE TABLE IF NOT EXISTS razorpay_orders (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   razorpay_order_id TEXT UNIQUE NOT NULL,
   contract_id UUID,
@@ -33,14 +33,18 @@ CREATE INDEX IF NOT EXISTS idx_razorpay_orders_status ON razorpay_orders(status)
 
 ALTER TABLE razorpay_orders ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies first, then recreate (safer than IF NOT EXISTS with EXECUTE)
+DROP POLICY IF EXISTS "Users read own razorpay orders" ON razorpay_orders;
 CREATE POLICY "Users read own razorpay orders" ON razorpay_orders 
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users insert own razorpay orders" ON razorpay_orders 
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+  FOR SELECT USING (auth.uid()::text = user_id::text);
 
--- 3. RAZORPAY TRANSACTIONS TABLE
+DROP POLICY IF EXISTS "Users insert own razorpay orders" ON razorpay_orders;
+CREATE POLICY "Users insert own razorpay orders" ON razorpay_orders 
+  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+
+-- 3. RAZORPAY TRANSACTIONS TABLE (skip if already exists)
 CREATE TABLE IF NOT EXISTS razorpay_transactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   razorpay_order_id UUID REFERENCES razorpay_orders(id) ON DELETE CASCADE,
   razorpay_payment_id TEXT UNIQUE NOT NULL,
   razorpay_signature TEXT,
@@ -57,9 +61,14 @@ CREATE TABLE IF NOT EXISTS razorpay_transactions (
 CREATE INDEX IF NOT EXISTS idx_razorpay_transactions_order_id ON razorpay_transactions(razorpay_order_id);
 ALTER TABLE razorpay_transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users read own razorpay transactions" ON razorpay_transactions;
 CREATE POLICY "Users read own razorpay transactions" ON razorpay_transactions 
   FOR SELECT USING (
-    EXISTS (SELECT 1 FROM razorpay_orders WHERE id = razorpay_order_id AND user_id = auth.uid())
+    EXISTS (
+      SELECT 1 FROM razorpay_orders 
+      WHERE id::text = razorpay_order_id::text 
+      AND user_id::text = auth.uid()::text
+    )
   );
 
 -- 4. USER COUNT FIX — Create a view that excludes deleted/suspended users
@@ -161,12 +170,17 @@ CREATE INDEX IF NOT EXISTS idx_contracts_freelancer_id_status ON contracts(freel
 CREATE INDEX IF NOT EXISTS idx_contracts_client_id_status ON contracts(client_id, status);
 
 -- 8. RLS POLICIES FOR ADMIN ACCESS
+DROP POLICY IF EXISTS "Admins can read all profiles" ON profiles;
 CREATE POLICY "Admins can read all profiles" ON profiles FOR SELECT USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  EXISTS (SELECT 1 FROM profiles WHERE id::text = auth.uid()::text AND role = 'admin')
 );
+
+DROP POLICY IF EXISTS "Admins can update all profiles" ON profiles;
 CREATE POLICY "Admins can update all profiles" ON profiles FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  EXISTS (SELECT 1 FROM profiles WHERE id::text = auth.uid()::text AND role = 'admin')
 );
 
 -- 9. FIX SUBSCRIPTION PLANS ID (ensure text IDs are valid)
-UPDATE subscription_plans SET id = id::text WHERE id IS NOT NULL;
+-- Avoid type error: id is UUID, can't cast to text directly
+-- Instead, just do a no-op update to trigger any side effects
+UPDATE subscription_plans SET updated_at = NOW() WHERE updated_at IS NULL;

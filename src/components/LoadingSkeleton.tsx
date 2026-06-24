@@ -1,6 +1,4 @@
-import { Inbox,
-  List,
-  Loader2 } from 'lucide-react';
+// LoadingSkeleton - no external icon imports needed
 
 type SkeletonVariant =
   | 'full-page'

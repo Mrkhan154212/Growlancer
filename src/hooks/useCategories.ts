@@ -68,7 +68,10 @@ export function useCategories(): UseCategoriesReturn {
       if (hierarchyResult.error) {
         console.warn('Category hierarchy RPC not available (migration pending):', hierarchyResult.error.message);
       } else if (hierarchyResult.data) {
-        setCategories(hierarchyResult.data as Category[]);
+        const raw = hierarchyResult.data as Category[];
+        // Sort categories A-Z alphabetically for consistent display across all pages
+        raw.sort((a, b) => a.name.localeCompare(b.name));
+        setCategories(raw);
       }
 
       if (countsResult.error) {

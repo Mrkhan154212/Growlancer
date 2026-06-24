@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
-import { CheckCircle,
+import { useState, useCallback } from 'react';
+import {
+  CheckCircle,
   CreditCard,
   IndianRupee,
   Loader2,
-  User,
-  Wallet,
-  XCircle } from 'lucide-react';
+  XCircle,
+} from 'lucide-react';
 import { razorpayService, type RazorpayOrderRequest, type RazorpayPaymentData } from '../lib/razorpay';
 
 interface RazorpayCheckoutProps {
@@ -50,7 +50,7 @@ export function RazorpayCheckout({
       setStatus('checkout');
 
       // 2. Open Razorpay checkout modal
-      const paymentData = await razorpayService.openCheckout({
+      await razorpayService.openCheckout({
         key: razorpay_key_id,
         amount: Math.round(amount * 100), // Razorpay expects paise/cents
         currency: currency,

@@ -25,7 +25,6 @@ import {
   MessageSquare,
   Star,
   Trophy,
-  LifeBuoy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -96,8 +95,7 @@ export function ClientDashboardLayout() {
   const location = useLocation();
   const { logout, user } = useAuth();
   const currentPath = location.pathname;
-  const [userProfile, setUserProfile] = useState<{ name: string; avatar: string | null; rating: number; total_reviews: number } | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<{ name: string; avatar: string | null } | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [badgeCounts, setBadgeCounts] = useState({
@@ -122,10 +120,6 @@ export function ClientDashboardLayout() {
     return false;
   };
 
-  const getRatingBadge = () => {
-    return 'Client';
-  };
-
   useEffect(() => {
     if (!user) {
       setUserProfile(null);
@@ -135,7 +129,6 @@ export function ClientDashboardLayout() {
 
     // Reset profile state when user changes
     setUserProfile(null);
-    setProfileLoading(true);
     
     // Fetch user profile
     const fetchUserProfile = async () => {
@@ -150,14 +143,12 @@ export function ClientDashboardLayout() {
           setUserProfile({
             name: data.name,
             avatar: data.avatar,
-            rating: 0,
-            total_reviews: 0
           });
         }
       } catch {
         // Profile fetch failed silently
       } finally {
-        setProfileLoading(false);
+        // Profile loading complete
       }
     };
 
@@ -555,9 +546,9 @@ export function ClientDashboardLayout() {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 sm:gap-4 w-full justify-end md:w-auto md:justify-end">
-            {/* AI Match Engine Badge */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
+          <div className="flex items-center gap-1 sm:gap-2 md:gap-4 shrink-0">
+            {/* AI Match Engine Badge - hidden on mobile, shown on md+ */}
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
               <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
                 AI Active
@@ -567,10 +558,10 @@ export function ClientDashboardLayout() {
             {/* Notifications */}
             <NotificationsPanel />
 
-            <div className="h-8 w-px bg-slate-200"></div>
+            <div className="hidden sm:block h-8 w-px bg-slate-200"></div>
 
             {/* User Menu */}
-            <button className="flex items-center gap-3 pl-1 pr-3 py-1 hover:bg-slate-50 rounded-full transition-all group">
+            <button className="flex items-center gap-1 sm:gap-3 pl-1 pr-1 sm:pr-3 py-1 hover:bg-slate-50 rounded-full transition-all group">
               {user?.avatar ? (
                 <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full overflow-hidden border-2 border-emerald-500/20 group-hover:border-emerald-500 transition-all">
                   <img
@@ -585,10 +576,10 @@ export function ClientDashboardLayout() {
                 </div>
               ) : (
                 <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-slate-100 flex items-center justify-center border-2 border-emerald-500/20">
-                  <User className="w-5 h-5 text-slate-400" />
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                 </div>
               )}
-              <div className="text-left hidden sm:block">
+              <div className="text-left hidden lg:block">
                 <p className="text-sm font-bold leading-tight truncate max-w-[120px]">{user?.name || 'Client'}</p>
               </div>
             </button>

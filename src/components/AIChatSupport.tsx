@@ -10,11 +10,7 @@ import {
   Lock,
   Send,
   Sparkles,
-  Split,
-  Ticket,
-  Type,
   User,
-  View,
   Zap,
 } from 'lucide-react';
 

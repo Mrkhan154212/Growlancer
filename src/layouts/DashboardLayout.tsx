@@ -26,7 +26,6 @@ import {
   Crown,
   Award,
   Clock,
-  LifeBuoy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -595,9 +594,9 @@ export function DashboardLayout() {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 sm:gap-4 w-full justify-end md:w-auto md:justify-end">
-            {/* AI Ready Badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
+          <div className="flex items-center gap-1 sm:gap-2 md:gap-4 shrink-0">
+            {/* AI Ready Badge - hidden on mobile, shown on md+ */}
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="text-xs font-bold text-emerald-700">AI Ready</span>
             </div>
@@ -605,12 +604,12 @@ export function DashboardLayout() {
             {/* Notifications */}
             <NotificationsPanel />
 
-            <div className="h-8 w-px bg-slate-200"></div>
+            <div className="hidden sm:block h-8 w-px bg-slate-200"></div>
 
             {/* User Menu */}
-            <button className="flex items-center gap-3 pl-1 pr-3 py-1 hover:bg-slate-50 rounded-full transition-all group">
+            <button className="flex items-center gap-1 sm:gap-3 pl-1 pr-1 sm:pr-3 py-1 hover:bg-slate-50 rounded-full transition-all group">
               {user?.avatar ? (
-                <div className="h-9 w-9 rounded-full overflow-hidden border-2 border-emerald-500/20 group-hover:border-emerald-500 transition-all">
+                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full overflow-hidden border-2 border-emerald-500/20 group-hover:border-emerald-500 transition-all">
                   <img
                     src={user.avatar}
                     alt={user.name || 'User'}
@@ -622,11 +621,11 @@ export function DashboardLayout() {
                   />
                 </div>
               ) : (
-                <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center border-2 border-emerald-500/20">
-                  <User className="w-5 h-5 text-slate-400" />
+                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-slate-100 flex items-center justify-center border-2 border-emerald-500/20">
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                 </div>
               )}
-              <div className="text-left hidden md:block">
+              <div className="text-left hidden lg:block">
                 <p className="text-sm font-bold leading-tight">{user?.name || 'User'}</p>
                 <div className="flex items-center gap-1">
                   <p className="text-[10px] text-slate-500 font-medium tracking-wide">{getRatingBadge()}</p>

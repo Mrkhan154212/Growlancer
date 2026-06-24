@@ -1,11 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
-import { AlertCircle,
+import {
+  AlertCircle,
   CheckCircle2,
-  Folder,
-  Image as ImageIcon,
   Link,
   Loader2,
-  Replace,
   Upload,
   X } from 'lucide-react';
 import { portfolioImageUpload } from '../lib/portfolioImageUpload';

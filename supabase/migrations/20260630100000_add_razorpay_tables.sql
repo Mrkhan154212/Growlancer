@@ -132,7 +132,33 @@ CREATE POLICY "Admins can view disputes"
     EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
   );
 
--- Enable realtime for both tables
-ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS razorpay_orders;
-ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS razorpay_transactions;
-ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS paypal_disputes;
+-- Enable realtime for both tables (DO block needed - ALTER PUBLICATION doesn't support IF NOT EXISTS)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND schemaname = 'public'
+    AND tablename = 'razorpay_orders'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE razorpay_orders;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND schemaname = 'public'
+    AND tablename = 'razorpay_transactions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE razorpay_transactions;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND schemaname = 'public'
+    AND tablename = 'paypal_disputes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE paypal_disputes;
+  END IF;
+END $$;

@@ -1,104 +1,204 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { supabase, dbFunctions } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import {
   ArrowRight,
   Briefcase,
   CheckCircle,
   DollarSign,
-  Save,
-  Send,
   Sparkles,
-  Target,
+  CheckCircle2,
 } from 'lucide-react';
-import { SkillsSelector } from '../components/SkillsSelector';
-import { useSkills } from '../hooks/useSkills';
 import { useCategories } from '../hooks/useCategories';
+import { useSkills } from '../hooks/useSkills';
+import { SkillsSelector } from '../components/SkillsSelector';
 
 export function ClientPostProjectPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { skills } = useSkills();
+  const [searchParams] = useSearchParams();
+  const editProjectId = searchParams.get('edit');
   const { categories } = useCategories();
+  const { skills: allSkills } = useSkills();
   const [loading, setLoading] = useState(false);
+  const [fetchingEditData, setFetchingEditData] = useState(!!editProjectId);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     budget_min: '',
     budget_max: '',
     skills_required: [] as string[],
-    skill_ids: [] as string[],
     deadline: '',
     category: '',
     experience_level: 'intermediate' as 'entry' | 'intermediate' | 'expert',
     visibility: 'public' as 'public' | 'private' | 'invited',
   });
 
+  // Load existing project data for edit mode
+  useEffect(() => {
+    if (!editProjectId) return;
+    
+    const fetchProject = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('id', editProjectId)
+          .eq('client_id', user?.id)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          const skillNames: string[] = data.skills_required || [];
+          setFormData({
+            title: data.title || '',
+            description: data.description || '',
+            budget_min: data.budget_min?.toString() || '',
+            budget_max: data.budget_max?.toString() || '',
+            skills_required: skillNames,
+            deadline: data.deadline ? data.deadline.slice(0, 10) : '',
+            category: data.category || '',
+            experience_level: data.experience_level || 'intermediate',
+            visibility: data.visibility || 'public',
+          });
+
+          // Resolve category and skill IDs from existing data
+          if (data.category) {
+            const cat = categories.find(c => c.name === data.category);
+            if (cat) setSelectedCategoryIds([cat.id]);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading project for edit:', err);
+      } finally {
+        setFetchingEditData(false);
+      }
+    };
+    fetchProject();
+  }, [editProjectId, user?.id]);
+
+  // Map selected skill IDs to skill names for form submission
+  const getSelectedSkillNames = (): string[] => {
+    return selectedSkillIds
+      .map(id => allSkills.find(s => s.id === id))
+      .filter((s): s is NonNullable<typeof s> => !!s)
+      .map(s => s.name);
+  };
+
+  // Sync selected category into formData.category string
+  useEffect(() => {
+    if (selectedCategoryIds.length > 0) {
+      const cat = categories.find(c => c.id === selectedCategoryIds[0]);
+      if (cat) setFormData(prev => ({ ...prev, category: cat.name }));
+    }
+  }, [selectedCategoryIds, categories]);
+
+  // Sync selected skill IDs into formData.skills_required
+  useEffect(() => {
+    const skillNames = getSelectedSkillNames();
+    if (skillNames.length > 0) {
+      setFormData(prev => ({ ...prev, skills_required: skillNames }));
+    }
+  }, [selectedSkillIds]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.title || !formData.description || !formData.budget_min || !formData.budget_max) {
+      alert('Please fill in all required fields');
+      return;
+    }
     setLoading(true);
 
     try {
-      // Insert the project
-      const { data: projectData, error: insertError } = await supabase
-        .from('projects')
-        .insert({
-          client_id: user?.id,
-          title: formData.title,
-          description: formData.description,
-          budget_min: parseInt(formData.budget_min),
-          budget_max: parseInt(formData.budget_max),
-          skills_required: formData.skills_required,
-          deadline: formData.deadline || null,
-          category: formData.category,
-          experience_level: formData.experience_level,
-          visibility: formData.visibility,
-        })
-        .select()
-        .single();
+      const projectData = {
+        client_id: user?.id,
+        title: formData.title,
+        description: formData.description,
+        budget_min: parseInt(formData.budget_min),
+        budget_max: parseInt(formData.budget_max),
+        skills_required: formData.skills_required,
+        deadline: formData.deadline || null,
+        category: formData.category,
+        experience_level: formData.experience_level,
+        visibility: formData.visibility,
+      };
+
+      let result;
+      if (editProjectId) {
+        // UPDATE existing project
+        result = await supabase
+          .from('projects')
+          .update({ ...projectData, updated_at: new Date().toISOString() })
+          .eq('id', editProjectId)
+          .select()
+          .single();
+      } else {
+        // INSERT new project
+        result = await supabase
+          .from('projects')
+          .insert(projectData)
+          .select()
+          .single();
+      }
+
+      const { data: projectDataResult, error: insertError } = result;
 
       if (insertError) throw insertError;
+      if (!projectDataResult) throw new Error('No project data returned');
 
-      // Save selected skills to project_skills table
-      if (projectData?.id && formData.skill_ids.length > 0) {
-        const skillInserts = formData.skill_ids.map((skillId) => ({
-          project_id: projectData.id,
+      // Save to project_categories and project_skills junction tables
+      const projectId = projectDataResult.id;
+
+      // Save category link
+      for (const catId of selectedCategoryIds) {
+        await supabase.from('project_categories').upsert({
+          project_id: projectId,
+          category_id: catId,
+        }, { onConflict: 'project_id, category_id', ignoreDuplicates: true });
+      }
+
+      // Save skill links
+      for (const skillId of selectedSkillIds) {
+        await supabase.from('project_skills').upsert({
+          project_id: projectId,
           skill_id: skillId,
-        }));
-        const { error: skillError } = await supabase
-          .from('project_skills')
-          .insert(skillInserts);
-
-        if (skillError) {
-          console.error('Error saving project skills:', skillError);
-        }
+        }, { onConflict: 'project_id, skill_id', ignoreDuplicates: true });
       }
 
-      // Generate AI matches for the project
-      if (projectData?.id) {
-        const { error: matchError } = await dbFunctions.generateProjectMatches(projectData.id);
-        
-        if (matchError) {
-          console.error('Error generating AI matches:', matchError);
-          // Don't fail the whole process if matching fails, just log it
-        }
-      }
+      // Clear old AI matches so fresh skill-based matching runs on matches page
+      await supabase.from('ai_matches').delete().eq('project_id', projectId);
 
-      navigate(`/client/matches?project_id=${projectData.id}`);
+      navigate(`/client/matches?project_id=${projectDataResult.id}`);
     } catch (error) {
-      console.error('Error creating project:', error);
-      alert('Failed to create project. Please try again.');
+      console.error('Error saving project:', error);
+      alert('Failed to save project. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  if (fetchingEditData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-slate-900 mb-2">Post New Project</h1>
-        <p className="text-slate-500">Fill in the details to post your project and get matched with talented freelancers</p>
+        <h1 className="font-display text-3xl font-bold text-slate-900 mb-2">
+          {editProjectId ? 'Edit Project' : 'Post New Project'}
+        </h1>
+        <p className="text-slate-500">
+          {editProjectId
+            ? 'Update your project details and regenerate AI matches'
+            : 'Fill in the details to post your project and get matched with talented freelancers'}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -161,11 +261,11 @@ export function ClientPostProjectPage() {
           </div>
         </div>
 
-        {/* Budget & Timeline */}
+        {/* Budget */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100">
           <h2 className="font-display text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-emerald-600" />
-            Budget & Timeline
+            Budget
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -181,7 +281,6 @@ export function ClientPostProjectPage() {
                 placeholder="500"
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Max Budget ($) *</label>
               <input
@@ -197,47 +296,52 @@ export function ClientPostProjectPage() {
           </div>
         </div>
 
-        {/* Skills - Category → Subcategory → Skills cascade */}
+        {/* Category → Subcategory → Skills Hierarchy (restored from SkillsSelector) */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100">
           <h2 className="font-display text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-emerald-600" />
-            Skills Required
+            Category & Skills
           </h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Step 1: Select a category → Step 2: Choose subcategories → Step 3: Pick specific skills needed for your project
+          <p className="text-sm text-slate-500 mb-4">
+            Select a category, subcategories, and specific skills your project requires
           </p>
           <SkillsSelector
             mode="client"
             maxSkills={15}
-            selectedSkillIds={formData.skill_ids}
-            onSkillsChange={(ids) => {
-              setFormData({
-                ...formData,
-                skill_ids: ids,
-                skills_required: skills.filter((s) => ids.includes(s.id)).map((s) => s.name),
-              });
-            }}
-            selectedCategoryIds={
-              formData.category
-                ? (() => {
-                    // Find category ID from name
-                    const cat = categories.find((c) => c.name === formData.category);
-                    return cat ? [cat.id] : [];
-                  })()
-                : []
-            }
-            onCategoriesChange={(ids) => {
-              // Derive category name from IDs
-              const cat = categories.find((c) => ids.includes(c.id));
-              setFormData({ ...formData, category: cat?.name || '' });
-            }}
+            maxCategories={1}
+            selectedCategoryIds={selectedCategoryIds}
+            selectedSkillIds={selectedSkillIds}
+            onCategoriesChange={setSelectedCategoryIds}
+            onSkillsChange={setSelectedSkillIds}
           />
+
+          {/* Show selected skills summary */}
+          {selectedSkillIds.length > 0 && (
+            <div className="mt-4 p-3 bg-emerald-50 rounded-xl">
+              <div className="flex items-center gap-1.5 mb-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm font-medium text-emerald-700">
+                  {selectedSkillIds.length} skills selected
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedSkillIds
+                  .map(id => allSkills.find(s => s.id === id))
+                  .filter((s): s is NonNullable<typeof s> => !!s)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map(skill => (
+                    <span key={skill.id} className="px-2 py-1 bg-white text-emerald-700 rounded-lg text-xs font-medium">
+                      {skill.name}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Visibility */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100">
           <h2 className="font-display text-lg font-bold text-slate-900 mb-4">Project Visibility</h2>
-
           <div className="space-y-3">
             {[
               { value: 'public', label: 'Public - Visible to all freelancers', desc: 'Get maximum exposure and proposals' },
@@ -286,12 +390,12 @@ export function ClientPostProjectPage() {
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Posting...
+                {editProjectId ? 'Updating...' : 'Posting...'}
               </>
             ) : (
               <>
                 <CheckCircle className="w-5 h-5" />
-                Post Project
+                {editProjectId ? 'Update Project' : 'Post Project'}
                 <ArrowRight className="w-5 h-5" />
               </>
             )}

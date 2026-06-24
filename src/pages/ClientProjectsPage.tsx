@@ -1,11 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { realtimeChannels, tables } from '../lib/supabase';
-import { Briefcase, Clock, Copy, DollarSign, Edit, Edit3, Eye, Filter, MoreVertical, Plus, Trash2, View,  } from 'lucide-react';
+import { supabase, realtimeChannels, tables } from '../lib/supabase';
+import { AlertTriangle, Briefcase, CheckCircle, CheckCircle2, Clock, DollarSign, Edit3, Eye, MoreVertical, Plus, RefreshCw, X } from 'lucide-react';
 
 /* ── Dropdown menu for each project card ── */
-function ProjectMenu({ projectId }: { projectId: string }) {
+function ProjectMenu({
+  projectId,
+  projectStatus,
+  onClose,
+  onComplete,
+  onReopen,
+}: {
+  projectId: string;
+  projectStatus: string;
+  onClose: (id: string) => void;
+  onComplete: (id: string) => void;
+  onReopen: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -18,6 +30,10 @@ function ProjectMenu({ projectId }: { projectId: string }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  const canModify = projectStatus === 'open' || projectStatus === 'in_progress';
+  const isCancelled = projectStatus === 'cancelled';
+  const isInProgress = projectStatus === 'in_progress';
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -28,7 +44,15 @@ function ProjectMenu({ projectId }: { projectId: string }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-white rounded-xl border border-slate-200 shadow-xl py-1.5 animate-in fade-in slide-in-from-top-1">
+        <div className="absolute right-0 top-full mt-1 z-50 w-52 bg-white rounded-xl border border-slate-200 shadow-xl py-1.5 animate-in fade-in slide-in-from-top-1">
+          <Link
+            to={`/projects/${projectId}`}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            <Eye className="w-4 h-4 text-slate-400" />
+            <span>View Details</span>
+          </Link>
           <Link
             to={`/client/matches?project_id=${projectId}`}
             className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
@@ -42,26 +66,50 @@ function ProjectMenu({ projectId }: { projectId: string }) {
             className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
             onClick={() => setOpen(false)}
           >
-            <Copy className="w-4 h-4 text-slate-400" />
+            <CheckCircle2 className="w-4 h-4 text-slate-400" />
             <span>View Proposals</span>
           </Link>
-          <Link
-            to={`/client/post?edit=${projectId}`}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-            onClick={() => setOpen(false)}
-          >
-            <Edit3 className="w-4 h-4 text-slate-400" />
-            <span>Edit Project</span>
-          </Link>
-          <div className="h-px bg-slate-100 my-1.5 mx-3" />
-          <Link
-            to={`/client/matches?project_id=${projectId}`}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-            onClick={() => setOpen(false)}
-          >
-            <Trash2 className="w-4 h-4 text-red-400" />
-            <span>Close Project</span>
-          </Link>
+          {canModify && (
+            <>
+              <Link
+                to={`/client/post?edit=${projectId}`}
+                className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                onClick={() => setOpen(false)}
+              >
+                <Edit3 className="w-4 h-4 text-slate-400" />
+                <span>Edit Project</span>
+              </Link>
+              {isInProgress && (
+                <button
+                  onClick={() => { setOpen(false); onComplete(projectId); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 transition-colors"
+                >
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Mark Complete</span>
+                </button>
+              )}
+              <div className="h-px bg-slate-100 my-1.5 mx-3" />
+              <button
+                onClick={() => { setOpen(false); onClose(projectId); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <X className="w-4 h-4 text-red-400" />
+                <span>Close Project</span>
+              </button>
+            </>
+          )}
+          {isCancelled && (
+            <>
+              <div className="h-px bg-slate-100 my-1.5 mx-3" />
+              <button
+                onClick={() => { setOpen(false); onReopen(projectId); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4 text-blue-400" />
+                <span>Reopen Project</span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -75,7 +123,7 @@ interface Project {
   budget_min: number;
   budget_max: number;
   skills_required: string[];
-  status: 'open' | 'active' | 'completed' | 'cancelled';
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
   deadline: string;
   category: string;
   experience_level: 'entry' | 'intermediate' | 'expert';
@@ -87,8 +135,13 @@ export function ClientProjectsPage() {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'open' | 'active' | 'completed'>('all');
-
+  const [filter, setFilter] = useState<'all' | 'open' | 'in_progress' | 'completed' | 'cancelled'>('all');
+  const [showCloseModal, setShowCloseModal] = useState<string | null>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState<string | null>(null);
+  const [showReopenModal, setShowReopenModal] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
   const fetchProjects = useCallback(async () => {
     if (!user?.id) return;
 
@@ -147,7 +200,7 @@ export function ClientProjectsPage() {
     switch (status) {
       case 'open':
         return 'bg-emerald-100 text-emerald-700';
-      case 'active':
+      case 'in_progress':
         return 'bg-blue-100 text-blue-700';
       case 'completed':
         return 'bg-slate-100 text-slate-700';
@@ -156,6 +209,53 @@ export function ClientProjectsPage() {
       default:
         return 'bg-slate-100 text-slate-700';
     }
+  };
+
+  const handleCloseProject = async (projectId: string) => {
+    if (!user?.id) return;
+    setClosingId(projectId);
+    const { error } = await supabase
+      .from('projects')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .eq('client_id', user.id);
+    if (!error) {
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: 'cancelled' } : p));
+    }
+    setClosingId(null);
+    setShowCloseModal(null);
+  };
+
+  const handleCompleteProject = async (projectId: string) => {
+    if (!user?.id) return;
+    setCompletingId(projectId);
+    const { error } = await supabase
+      .from('projects')
+      .update({ status: 'completed', updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .eq('client_id', user.id);
+    if (!error) {
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: 'completed' } : p));
+    }
+    setCompletingId(null);
+    setShowCompleteModal(null);
+  };
+
+  const handleReopenProject = async (projectId: string) => {
+    if (!user?.id) return;
+    setReopeningId(projectId);
+    const { error } = await supabase
+      .from('projects')
+      .update({ status: 'open', updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .eq('client_id', user.id);
+    if (!error) {
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: 'open' } : p));
+      // Regenerate AI matches on reopen
+      await supabase.from('ai_matches').delete().eq('project_id', projectId);
+    }
+    setReopeningId(null);
+    setShowReopenModal(null);
   };
 
   const formatBudget = (min: number, max: number) => {
@@ -189,17 +289,17 @@ export function ClientProjectsPage() {
 
       {/* Filter Tabs */}
       <div className="flex gap-2 border-b border-slate-200">
-        {(['all', 'open', 'active', 'completed'] as const).map((f) => (
+        {(['all', 'open', 'in_progress', 'completed', 'cancelled'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-4 py-2 font-medium capitalize transition-colors ${
               filter === f
                 ? 'text-emerald-600 border-b-2 border-emerald-600'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === 'in_progress' ? 'In Progress' : f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
       </div>
@@ -256,7 +356,7 @@ export function ClientProjectsPage() {
                   </div>
                   <p className="text-slate-600 text-sm line-clamp-2">{project.description}</p>
                 </div>
-                <ProjectMenu projectId={project.id} />
+                <ProjectMenu projectId={project.id} projectStatus={project.status} onClose={setShowCloseModal} onComplete={setShowCompleteModal} onReopen={setShowReopenModal} />
               </div>
 
               <div className="flex flex-wrap gap-4 text-sm text-slate-500 mb-4">
@@ -311,6 +411,102 @@ export function ClientProjectsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Close Project Modal */}
+      {showCloseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-center w-16 h-16 bg-orange-100 rounded-2xl mb-5 mx-auto">
+              <AlertTriangle className="w-8 h-8 text-orange-600" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 text-center mb-2">Close Project</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              This will mark the project as cancelled. Freelancers will no longer be able to apply.
+              Active contracts will continue in your workspace.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCloseModal(null)}
+                disabled={closingId !== null}
+                className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Keep Open
+              </button>
+              <button
+                onClick={() => showCloseModal && handleCloseProject(showCloseModal)}
+                disabled={closingId !== null}
+                className="flex-1 px-4 py-3 bg-orange-600 text-white font-medium rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50"
+              >
+                {closingId === showCloseModal ? 'Closing...' : 'Close Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Project Modal */}
+      {showCompleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-2xl mb-5 mx-auto">
+              <CheckCircle className="w-8 h-8 text-emerald-600" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 text-center mb-2">Mark Project Complete</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              This will mark the project as completed. Escrow funds will be released to the freelancer.
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCompleteModal(null)}
+                disabled={completingId !== null}
+                className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => showCompleteModal && handleCompleteProject(showCompleteModal)}
+                disabled={completingId !== null}
+                className="flex-1 px-4 py-3 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              >
+                {completingId === showCompleteModal ? 'Completing...' : 'Complete Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reopen Project Modal */}
+      {showReopenModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-5 mx-auto">
+              <RefreshCw className="w-8 h-8 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 text-center mb-2">Reopen Project</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              This will reopen the project with status "Open". Freelancers will be able to apply again.
+              AI matches will be regenerated.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowReopenModal(null)}
+                disabled={reopeningId !== null}
+                className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => showReopenModal && handleReopenProject(showReopenModal)}
+                disabled={reopeningId !== null}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {reopeningId === showReopenModal ? 'Reopening...' : 'Reopen Project'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

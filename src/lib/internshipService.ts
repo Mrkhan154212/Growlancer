@@ -21,6 +21,7 @@ export interface InternshipApplicationInput {
   degree?: string;
   graduation_year?: string;
   linkedin_url?: string;
+  discord_handle?: string;
   github_url?: string;
   portfolio_url?: string;
   resume_file_path?: string;
@@ -336,13 +337,14 @@ export const internshipService = {
   },
 
   /**
-   * Submit an internship application to Supabase.
+   * Submit an internship application via the edge function.
+   * Edge function handles: DB insert + Resend emails (admin + applicant).
    */
   async submitApplication(
     input: InternshipApplicationInput
   ): Promise<InternshipApplicationResult> {
     try {
-      const insertData: InternshipInsert = {
+      const payload = {
         full_name: input.full_name.trim(),
         email: input.email.trim().toLowerCase(),
         phone: input.phone?.trim() || null,
@@ -353,6 +355,7 @@ export const internshipService = {
         degree: input.degree?.trim() || null,
         graduation_year: input.graduation_year?.trim() || null,
         linkedin_url: input.linkedin_url?.trim() || null,
+        discord_handle: input.discord_handle?.trim() || null,
         github_url: input.github_url?.trim() || null,
         portfolio_url: input.portfolio_url?.trim() || null,
         resume_url: input.resume_url?.trim() || null,
@@ -363,19 +366,33 @@ export const internshipService = {
         weekly_availability: input.weekly_availability || null,
         available_from: input.available_from || null,
         available_to: input.available_to || null,
-        status: 'applied',
       };
 
-      const { error } = await supabase
-        .from('internship_applications')
-        .insert(insertData);
+      const { data, error } = await supabase.functions.invoke(
+        'internship-applications',
+        {
+          method: 'POST',
+          body: payload,
+        }
+      );
 
       if (error) {
-        console.error('Error submitting internship application:', error);
-        return { success: false, error: error.message };
+        console.error('Error invoking internship-applications edge function:', error);
+        // Try to parse error message from the response
+        const errMsg = typeof error === 'object' && error !== null
+          ? (error as any).message || error.toString()
+          : String(error);
+        return { success: false, error: errMsg };
       }
 
-      return { success: true };
+      const result = data as { success?: boolean; application_id?: string; emails_sent?: { admin: boolean; applicant: boolean } };
+
+      if (result?.success) {
+        console.log('Application submitted successfully via edge function. Emails:', result.emails_sent);
+        return { success: true };
+      }
+
+      return { success: false, error: 'Application failed to process. Please try again.' };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to submit application';
       console.error('Exception submitting internship application:', err);

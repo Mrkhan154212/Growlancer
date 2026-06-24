@@ -418,23 +418,23 @@ export function OverviewPage() {
           {/* AI Recommendations / Projects */}
           {isFreelancer ? (
             <div className="bg-gradient-to-r from-emerald-500 via-teal-600 to-emerald-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg hover:shadow-emerald-500/20 hover:-translate-y-0.5 transition-all duration-300 transform animate-workflow-flow">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center animate-workflow-pulse shrink-0">
                     <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold flex items-center gap-1.5">
-                      AI-Powered Recommendations <span className="flex h-2 w-2 rounded-full bg-emerald-300 animate-ping"></span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base sm:text-lg font-semibold flex items-center gap-1.5 flex-wrap">
+                      AI-Powered Recommendations <span className="flex h-2 w-2 rounded-full bg-emerald-300 animate-ping shrink-0"></span>
                     </h3>
                     <p className="text-emerald-100 text-xs sm:text-sm">Projects matching your skills</p>
                   </div>
                 </div>
                 <Link
                   to="/dashboard/feed"
-                  className="self-start sm:self-auto bg-white text-emerald-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium hover:bg-emerald-50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2"
+                  className="                  w-full sm:w-auto text-center self-start sm:self-auto bg-white text-emerald-600 px-4 sm:px-4 py-2 sm:py-2 rounded-lg text-sm sm:text-base font-semibold hover:bg-emerald-50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
                 >
-                  View All <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  View All <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>                  {recentProjects.length > 0 ? (
                 <div className="mt-6 space-y-3">
