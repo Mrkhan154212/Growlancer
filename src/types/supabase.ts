@@ -909,7 +909,7 @@ export type Database = {
           available_to: string | null
           cover_letter: string
           created_at: string
-          discord_handle: string | null
+          google_meet_link: string | null
           education: string | null
           email: string
           full_name: string
@@ -932,7 +932,7 @@ export type Database = {
           available_to?: string | null
           cover_letter: string
           created_at?: string
-          discord_handle?: string | null
+          google_meet_link?: string | null
           education?: string | null
           email: string
           full_name: string
@@ -955,7 +955,7 @@ export type Database = {
           available_to?: string | null
           cover_letter?: string
           created_at?: string
-          discord_handle?: string | null
+          google_meet_link?: string | null
           education?: string | null
           email?: string
           full_name?: string

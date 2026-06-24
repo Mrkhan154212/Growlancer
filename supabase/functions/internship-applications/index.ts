@@ -30,7 +30,7 @@ interface ApplicationData {
   role_id: string
   role_name: string
   linkedin_url?: string
-  discord_handle?: string
+  google_meet_link?: string
   github_url?: string
   portfolio_url?: string
   resume_url?: string
@@ -259,7 +259,7 @@ function buildSelectedEmailHtml(name: string, roleName: string): string {
       <ol style="font-size: 14px; color: #166534; margin: 0; padding-left: 20px;">
         <li style="padding: 4px 0;">Welcome email with onboarding details</li>
         <li style="padding: 4px 0;">Access to GitHub repository and tools</li>
-        <li style="padding: 4px 0;">Introduction to the team on Discord</li>
+        <li style="padding: 4px 0;">Introduction to the team via Google Meet</li>
         <li style="padding: 4px 0;">First task assignment and kickoff call</li>
       </ol>
     </div>
@@ -373,8 +373,7 @@ serve(async (req) => {
     if (method === 'POST') {
       const body = await req.json()
       const {
-        full_name, email, phone, country, university, degree, graduation_year,
-        role_id, role_name, linkedin_url, discord_handle, github_url, portfolio_url,
+        full_name, email, phone, country, university, degree, graduation_year,        role_id, role_name, linkedin_url, google_meet_link, github_url, portfolio_url,
         resume_url, resume_file_path, resume_file_name,
         cover_letter, why_growlancer, weekly_availability,
         available_from, available_to,
@@ -404,7 +403,7 @@ serve(async (req) => {
           university: university || null, degree: degree || null,
           graduation_year: graduation_year || null, role_id, role_name,
           linkedin_url: linkedin_url || null,
-          discord_handle: discord_handle || null,
+          google_meet_link: google_meet_link || null,
           github_url: github_url || null, portfolio_url: portfolio_url || null,
           resume_url: resume_url || null,
           resume_file_path: resume_file_path || null,
@@ -428,8 +427,7 @@ serve(async (req) => {
 
       // === SEND EMAILS VIA BREVO ===
       const appData: ApplicationData = {
-        full_name, email, phone, country, university, degree, graduation_year,
-        role_id, role_name, linkedin_url, discord_handle, github_url, portfolio_url,
+        full_name, email, phone, country, university, degree, graduation_year,        role_id, role_name, linkedin_url, google_meet_link, github_url, portfolio_url,
         resume_url, resume_file_path, resume_file_name,
         cover_letter, why_growlancer, weekly_availability,
       }

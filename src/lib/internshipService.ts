@@ -21,7 +21,7 @@ export interface InternshipApplicationInput {
   degree?: string;
   graduation_year?: string;
   linkedin_url?: string;
-  discord_handle?: string;
+  google_meet_link?: string;
   github_url?: string;
   portfolio_url?: string;
   resume_file_path?: string;
@@ -99,7 +99,7 @@ export const INTERNSHIP_ROLES: InternshipRole[] = [
       'VS Code or preferred editor',
       'Node.js 18+ and npm',
       'Git + GitHub',
-      'Discord/Slack for communication',
+      'Google Meet for video calls',
     ],
     outcomes: [
       'Ship 15–25 polished, tested components',
@@ -267,7 +267,7 @@ export const INTERNSHIP_ROLES: InternshipRole[] = [
       'Figma (free tier is sufficient)',
       'Modern browser with design tools',
       'Design handoff tools (Figma Dev Mode)',
-      'Discord/Slack for communication',
+      'Google Meet for video calls',
     ],
     outcomes: [
       'Complete UI audit covering all 50+ pages',
@@ -355,7 +355,7 @@ export const internshipService = {
         degree: input.degree?.trim() || null,
         graduation_year: input.graduation_year?.trim() || null,
         linkedin_url: input.linkedin_url?.trim() || null,
-        discord_handle: input.discord_handle?.trim() || null,
+        google_meet_link: input.google_meet_link?.trim() || null,
         github_url: input.github_url?.trim() || null,
         portfolio_url: input.portfolio_url?.trim() || null,
         resume_url: input.resume_url?.trim() || null,

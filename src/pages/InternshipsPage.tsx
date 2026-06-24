@@ -272,7 +272,7 @@ function ApplicationForm({
   const [university, setUniversity] = useState('');
   const [degree, setDegree] = useState('');
   const [graduationYear, setGraduationYear] = useState('');
-  const [discordHandle, setDiscordHandle] = useState('');
+  const [googleMeetLink, setGoogleMeetLink] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [portfolioUrl, setPortfolioUrl] = useState('');
@@ -320,7 +320,7 @@ function ApplicationForm({
       degree: degree || undefined,
       graduation_year: graduationYear || undefined,
       linkedin_url: linkedinUrl || undefined,
-      discord_handle: discordHandle || undefined,
+      google_meet_link: googleMeetLink || undefined,
       github_url: githubUrl || undefined,
       portfolio_url: portfolioUrl || undefined,
       resume_url: resumeUrl || undefined,
@@ -503,12 +503,12 @@ function ApplicationForm({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Discord Handle (optional)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Google Meet Email (optional)</label>
                     <input
-                      type="text"
-                      value={discordHandle}
-                      onChange={(e) => setDiscordHandle(e.target.value)}
-                      placeholder="e.g. yourhandle#1234"
+                      type="email"
+                      value={googleMeetLink}
+                      onChange={(e) => setGoogleMeetLink(e.target.value)}
+                      placeholder="your.email@gmail.com (for interview scheduling)"
                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all"
                     />
                   </div>
@@ -744,7 +744,7 @@ const FAQS = [
   },
   {
     q: 'Is this remote?',
-    a: 'Yes, this is a fully remote, global internship. We communicate asynchronously via Discord and GitHub, with bi-weekly 1:1 video calls. You need your own laptop and stable internet.',
+    a: 'Yes, this is a fully remote, global internship. We communicate via Google Meet for video calls and GitHub for code collaboration, with bi-weekly 1:1 mentoring sessions. You need your own laptop and stable internet.',
   },
   {
     q: 'What happens after I submit my application?',
