@@ -115,11 +115,7 @@ export async function createUserProfile(
   const safeRole = ALLOWED_SIGNUP_ROLES.includes(role) ? role : 'freelancer';
   const code = referralCode ?? createReferralCode(safeRole.substring(0, 2).toUpperCase());
 
-  // 🆕 Use SECURITY DEFINER RPC instead of direct upsert to bypass RLS
-  // This works even when the user doesn't have a valid session yet
-  // (email confirmation not completed).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Try RPC first (SECURITY DEFINER bypasses RLS for unverified users)
   const { data: rpcData, error: rpcError } = await supabase.rpc('create_user_profile' as any, {
     p_id: userId,
     p_email: email,
@@ -129,13 +125,31 @@ export async function createUserProfile(
   });
 
   if (rpcError) {
-    console.error('[Auth] create_user_profile RPC failed:', JSON.stringify(rpcError, null, 2));
-    captureError('Failed to create user profile', {
-      source: 'auth',
-      userId,
-      errorMessage: typeof rpcError === 'object' ? JSON.stringify(rpcError) : String(rpcError),
-    });
-    return null;
+    console.warn('[Auth] create_user_profile RPC failed (non-fatal):', rpcError?.message || rpcError);
+    
+    // 🆕 Fallback: try direct insert (works when email is confirmed / session is valid)
+    try {
+      const { error: insertError } = await supabase.from('profiles').upsert({
+        id: userId,
+        email: email,
+        name: name,
+        role: safeRole,
+        referral_code: code,
+        is_pro: false,
+        onboarding_completed: false,
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'id', ignoreDuplicates: false });
+      
+      if (insertError) {
+        console.warn('[Auth] Direct profile insert also failed (non-fatal):', insertError.message);
+        return null;
+      }
+      
+      // Direct insert succeeded! Fetch and return
+      return fetchUserProfile(userId);
+    } catch {
+      return null;
+    }
   }
   
   console.log('[Auth] create_user_profile RPC success:', JSON.stringify(rpcData));

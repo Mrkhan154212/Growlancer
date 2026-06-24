@@ -110,17 +110,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Try to fetch existing profile
       let profile = await ensureUserProfile(authUser, roleHint, !!roleHint);
 
-      // 🆕 OAuth fallback: if email is confirmed (auto-verified by OAuth provider)
-      // but no profile exists yet, create one with default 'freelancer' role.
-      // The onboarding page will let them switch to 'client' if needed.
+      // 🆕 Deferred profile creation: if email is confirmed but no profile exists
+      // (e.g., signup RPC failed, or OAuth signup), create one now.
+      // Uses saved role from user_metadata to preserve user's choice.
       if (!profile && authUser.email_confirmed_at) {
-        devLog('[Auth] OAuth user without profile — auto-creating with default role');
+        devLog('[Auth] User without profile — auto-creating now (email confirmed)');
         const meta = authUser.user_metadata || {};
         const name =
           (typeof meta.name === 'string' && meta.name.trim()) ||
           (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
           authUser.email?.split('@')[0] ||
           'User';
+        
+        // 🆕 Use saved role from user_metadata if available, else default to 'freelancer'
+        const savedRole = (meta.role === 'freelancer' || meta.role === 'client')
+          ? meta.role as UserRole
+          : (roleHint || 'freelancer');
         
         // 🆕 Check for saved referral code from localStorage (preserved during OAuth)
         let oauthRefCode: string | undefined;
@@ -135,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           authUser.id,
           authUser.email || '',
           name,
-          roleHint || 'freelancer',
+          savedRole,
           refCode,
         );
 
@@ -523,7 +528,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
-          data: { name, referral_code: referralCode, referred_by: referrerCode || null },
+          data: { name, role, referral_code: referralCode, referred_by: referrerCode || null },
           emailRedirectTo: `${window.location.origin}/login`,
         },
       });
@@ -535,15 +540,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.user) {
+        // Try to create profile immediately (may fail if no valid session yet)
+        // Non-fatal: if it fails, the profile will be created lazily via
+        // syncAuthUser when the user verifies their email and returns.
         const created = await createUserProfile(data.user.id, email, name, role, referralCode);
 
         if (!created) {
-          devWarn('[Auth] Profile creation error');
-          captureError('Signup profile creation failed', {
+          devWarn('[Auth] Profile creation deferred — will be created on email verification');
+          captureInfo('Signup profile creation deferred', {
             source: 'auth',
+            userId: data.user.id,
           });
-          setIsLoading(false);
-          return { success: false, error: 'Failed to create profile. Please try again.' };
+          // 👇 Continue with signup success — profile will be created later
         }
 
         // Process referral if this signup came from a referral link
