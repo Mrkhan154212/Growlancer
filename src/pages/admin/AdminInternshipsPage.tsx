@@ -137,10 +137,19 @@ export function AdminInternshipsPage() {
     setActionLoading(`status-${id}`);
     try {
       const notes = notesInput[id] || undefined;
-      await supabase
-        .from('internship_applications')
-        .update({ status, notes: notes || null })
-        .eq('id', id);
+      // Call the edge function so status emails are sent via Brevo
+      const { error } = await supabase.functions.invoke('internship-applications', {
+        method: 'PATCH',
+        body: { application_id: id, status, notes },
+      });
+      if (error) {
+        console.error('Status update via edge function failed:', error);
+        // Fallback to direct DB update
+        await supabase
+          .from('internship_applications')
+          .update({ status, notes: notes || null })
+          .eq('id', id);
+      }
       setStatusChangeId(null);
       setNotesInput(prev => ({ ...prev, [id]: '' }));
       await fetchApplications();

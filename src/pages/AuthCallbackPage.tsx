@@ -69,20 +69,29 @@ export function AuthCallbackPage() {
         if (cancelled) return;
 
         // ── 4. Redirect based on onboarding status ──
-        // The AuthContext will have synced the profile by now
-        // Check if onboarding is needed
-        const profile = authUser?.id ? await fetchUserProfile(authUser.id) : null;
+        // The AuthContext will have synced the profile by now.
+        // Retry a few times since syncAuthUser may still be creating it.
+        let profile = null;
+        for (let i = 0; i < 5; i++) {
+          profile = authUser?.id ? await fetchUserProfile(authUser.id) : null;
+          if (profile) break;
+          await new Promise(r => setTimeout(r, 600));
+        }
+
         if (profile && !profile.onboardingCompleted) {
           // This page is only reached via OAuth redirects, so always use the mini form
           navigate('/onboarding?mode=oauth', { replace: true });
-        } else {
+        } else if (profile) {
           const dashboardRoute =
-            profile?.role === 'client'
+            profile.role === 'client'
               ? '/client'
-              : profile?.role === 'admin'
+              : profile.role === 'admin'
                 ? '/admin'
                 : '/dashboard';
           navigate(dashboardRoute, { replace: true });
+        } else {
+          // Still no profile — redirect to onboarding to let the mini form create it
+          navigate('/onboarding?mode=oauth', { replace: true });
         }
       } catch (err) {
         if (!cancelled) {

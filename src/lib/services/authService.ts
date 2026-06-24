@@ -54,7 +54,8 @@ export function createReferralCode(prefix: string): string {
 
 /**
  * Fetches a single user profile by ID from the profiles table.
- * Returns `null` if not found or on error.
+ * Returns `null` if not found, suspended, or on error.
+ * Suspended users are treated as non-existent (prevents dashboard access).
  */
 export async function fetchUserProfile(userId: string): Promise<AuthUser | null> {
   try {
@@ -65,6 +66,11 @@ export async function fetchUserProfile(userId: string): Promise<AuthUser | null>
       .single();
 
     if (error || !data) {
+      return null;
+    }
+
+    // 🚫 SUSPENDED USER BLOCK — treat as non-existent
+    if (data.suspended_at) {
       return null;
     }
 
@@ -109,21 +115,19 @@ export async function createUserProfile(
   const safeRole = ALLOWED_SIGNUP_ROLES.includes(role) ? role : 'freelancer';
   const code = referralCode ?? createReferralCode(safeRole.substring(0, 2).toUpperCase());
 
-  const { error: upsertError } = await supabase.from('profiles').upsert(
-    {
-      id: userId,
-      email,
-      name,
-      role: safeRole,
-      referral_code: code,
-      is_pro: false,
-      onboarding_completed: false,
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: 'id', ignoreDuplicates: false },
-  );
+  // 🆕 Use SECURITY DEFINER RPC instead of direct upsert to bypass RLS
+  // This works even when the user doesn't have a valid session yet
+  // (email confirmation not completed).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: rpcError } = await supabase.rpc('create_user_profile' as any, {
+    p_id: userId,
+    p_email: email,
+    p_name: name,
+    p_role: safeRole,
+    p_referral_code: code,
+  });
 
-  if (upsertError) {
+  if (rpcError) {
     captureError('Failed to create user profile', {
       source: 'auth',
       userId,
