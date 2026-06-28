@@ -279,8 +279,8 @@ function ApplicationForm({
     e.preventDefault();
     setError(null);
 
-    if (!fullName.trim() || !email.trim() || !portfolioUrl.trim() || !coverLetter.trim()) {
-      setError('Please fill in all required fields: Name, Email, Portfolio/GitHub link, and Cover Letter.');
+    if (!fullName.trim() || !email.trim() || !portfolioUrl.trim() || !coverLetter.trim() || !linkedinUrl.trim()) {
+      setError('Please fill in all required fields: Name, Email, LinkedIn Profile, Portfolio/GitHub link, and Cover Letter.');
       return;
     }
 
@@ -512,9 +512,12 @@ function ApplicationForm({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">LinkedIn Profile (optional)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      LinkedIn Profile <span className="text-red-400">*</span>
+                    </label>
                     <input
                       type="url"
+                      required
                       value={linkedinUrl}
                       onChange={(e) => setLinkedinUrl(e.target.value)}
                       placeholder="https://linkedin.com/in/username"

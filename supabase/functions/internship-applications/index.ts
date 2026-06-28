@@ -386,9 +386,9 @@ serve(async (req) => {
         available_from, available_to,
       } = body
 
-      if (!full_name || !email || !role_id || !role_name || !cover_letter) {
+      if (!full_name || !email || !role_id || !role_name || !cover_letter || !linkedin_url) {
         return new Response(
-          JSON.stringify({ error: 'Missing required fields: full_name, email, role_id, role_name, cover_letter' }),
+          JSON.stringify({ error: 'Missing required fields: full_name, email, role_id, role_name, linkedin_url, cover_letter' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
