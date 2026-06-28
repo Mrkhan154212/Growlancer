@@ -14,6 +14,9 @@ const BREVO_FROM_NAME = 'Growlancer Team'
 const ADMIN_EMAIL = 'growlancer.own@gmail.com'
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://growlancer.vercel.app'
 
+const GITHUB_URL = 'https://github.com/Mrkhan154212/Growlancer'
+const WELCOME_PACKAGE_URL = 'https://growlancer.vercel.app/internships'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-version, x-app-name',
@@ -248,29 +251,106 @@ function buildInterviewEmailHtml(name: string, roleName: string): string {
   return baseEmailHtml('Interview Invitation 🎤', body)
 }
 
-/** Selected */
+/** Selected — with full onboarding details & welcome package link */
 function buildSelectedEmailHtml(name: string, roleName: string): string {
   const body = `
     <p style="font-size: 15px; color: #0f172a; line-height: 1.7;">Hi ${name},</p>
     <p style="font-size: 15px; color: #0f172a; line-height: 1.7;">
       We're thrilled to inform you that you've been <strong>selected</strong> for the <strong>${roleName}</strong> position at Growlancer! 🎉
     </p>
-    <div style="margin: 28px 0; padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;">
-      <h3 style="font-size: 14px; color: #166534; margin: 0 0 8px;">🚀 Onboarding Steps</h3>
-      <ol style="font-size: 14px; color: #166534; margin: 0; padding-left: 20px;">
-        <li style="padding: 4px 0;">Welcome email with onboarding details</li>
-        <li style="padding: 4px 0;">Access to GitHub repository and tools</li>
-        <li style="padding: 4px 0;">Introduction to the team via Google Meet</li>
-        <li style="padding: 4px 0;">First task assignment and kickoff call</li>
-      </ol>
+
+    <!-- Welcome Package CTA -->
+    <div style="margin: 28px 0; padding: 24px; background: linear-gradient(135deg, #059669 0%, #047857 100%); border-radius: 16px; text-align: center;">
+      <h3 style="font-size: 18px; color: white; margin: 0 0 8px;">📦 Welcome Package</h3>
+      <p style="font-size: 14px; color: #d1fae5; margin: 0 0 16px; line-height: 1.5;">
+        Your onboarding kit includes: GitHub access, tools setup guide,
+        team introduction, project roadmap, and your first task assignment.
+      </p>
+      <a href="${WELCOME_PACKAGE_URL}"
+         style="display: inline-block; padding: 14px 36px; background: white; color: #059669; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px;">
+        🚀 Access Your Welcome Package →
+      </a>
     </div>
+
+    <!-- Detailed Onboarding Timeline -->
+    <h3 style="font-size: 16px; color: #0f172a; margin: 0 0 16px;">🗓️ Your Onboarding Timeline</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 24px;">
+      <tr>
+        <td style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #dcfce7; border-radius: 8px 0 0 0;">
+          <strong style="color: #166534;">Day 1</strong>
+        </td>
+        <td style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #dcfce7; border-radius: 0 8px 0 0;">
+          <span style="color: #166534;">✅ Welcome email + GitHub repository access + Slack/Discord invite</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #e5e7eb;">
+          <strong style="color: #374151;">Day 2</strong>
+        </td>
+        <td style="padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #e5e7eb;">
+          <span style="color: #374151;">🔧 Tools setup (VS Code, Node.js, Supabase CLI) + environment configuration</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #dcfce7;">
+          <strong style="color: #166534;">Day 3</strong>
+        </td>
+        <td style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #dcfce7;">
+          <span style="color: #166534;">🎤 Kickoff call (30 min with founder) + team introduction + codebase walkthrough</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 12px 16px; background: #fafafa;">
+          <strong style="color: #374151;">Day 4</strong>
+        </td>
+        <td style="padding: 12px 16px; background: #fafafa;">
+          <span style="color: #374151;">📋 First task assignment + project roadmap review + weekly schedule setup</span>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Quick Reference Links -->
+    <div style="margin: 24px 0; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+      <h3 style="font-size: 14px; color: #0f172a; margin: 0 0 12px;">🔗 Quick Reference Links</h3>
+      <table style="font-size: 13px; width: 100%;">
+        <tr>
+          <td style="padding: 4px 0;">📂 GitHub Organization</td>
+          <td style="padding: 4px 0;"><a href="${GITHUB_URL}" style="color: #059669; text-decoration: none;">github.com/Growlancer →</a></td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0;">📖 Documentation</td>
+          <td style="padding: 4px 0;"><a href="${APP_URL}/help-center" style="color: #059669; text-decoration: none;">Help Center →</a></td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0;">📋 Project Board</td>
+          <td style="padding: 4px 0;"><a href="${APP_URL}/internships" style="color: #059669; text-decoration: none;">Internship Dashboard →</a></td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0;">📧 Contact</td>
+          <td style="padding: 4px 0;"><a href="mailto:${ADMIN_EMAIL}" style="color: #059669; text-decoration: none;">${ADMIN_EMAIL} →</a></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Expectations -->
+    <div style="margin: 24px 0; padding: 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px;">
+      <h3 style="font-size: 14px; color: #92400e; margin: 0 0 8px;">⭐ What We Expect</h3>
+      <ul style="font-size: 13px; color: #92400e; margin: 0; padding-left: 20px; line-height: 1.7;">
+        <li>Commit at least <strong>15 hours/week</strong> to your tasks</li>
+        <li>Attend bi-weekly <strong>1:1 mentoring calls</strong></li>
+        <li>Communicate proactively in team channels</li>
+        <li>Submit work for code review before merging</li>
+        <li>Log your hours and progress weekly</li>
+      </ul>
+    </div>
+
     <p style="font-size: 14px; color: #64748b; line-height: 1.7;">
-      Our team will send you the complete onboarding package within 24 hours.
-      Get ready to build the future of AI-powered freelancing! 🚀
+      We're excited to have you on board! The entire team is looking forward to working with you.
+      If you have any questions before your onboarding starts, don't hesitate to reach out.
     </p>
     <p style="font-size: 14px; color: #64748b; line-height: 1.7;">
-      Welcome aboard!<br/>
-      — The Growlancer Team
+      Welcome to the team! 🚀<br/>
+      <strong>— Muhammad Rizwan, Founder @ Growlancer</strong>
     </p>`
   return baseEmailHtml('Welcome to Growlancer — You\'re Selected! 🎉🚀', body)
 }
