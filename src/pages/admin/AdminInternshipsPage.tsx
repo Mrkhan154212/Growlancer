@@ -111,7 +111,7 @@ export function AdminInternshipsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<ApplicationStatus>('shortlisted');
   const [emailLogs, setEmailLogs] = useState<Record<string, { status: string; sent: boolean; time: string }[]>>({});
-  const selectAllRef = useRef<HTMLInputElement>(null);
+  const selectAllRef = useRef<HTMLButtonElement>(null);
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
@@ -151,14 +151,12 @@ export function AdminInternshipsPage() {
     setActionLoading(`status-${id}`);
     try {
       const notes = notesInput[id] || undefined;
-      // Call the edge function so status emails are sent via Brevo
       const { error } = await supabase.functions.invoke('internship-applications', {
         method: 'PATCH',
         body: { application_id: id, status, notes },
       });
       if (error) {
         console.error('Status update via edge function failed:', error);
-        // Fallback to direct DB update
         await supabase
           .from('internship_applications')
           .update({ status, notes: notes || null })
@@ -166,7 +164,6 @@ export function AdminInternshipsPage() {
       }
       setStatusChangeId(null);
       setNotesInput(prev => ({ ...prev, [id]: '' }));
-      // Track email log
       setEmailLogs(prev => ({
         ...prev,
         [id]: [...(prev[id] || []), { status, sent: true, time: new Date().toISOString() }],
@@ -212,7 +209,6 @@ export function AdminInternshipsPage() {
         }).catch(() =>
           supabase.from('internship_applications').update({ status: bulkStatus }).eq('id', id)
         );
-        // Track email log
         setEmailLogs(prev => ({
           ...prev,
           [id]: [...(prev[id] || []), { status: bulkStatus, sent: true, time: new Date().toISOString() }],
@@ -237,7 +233,7 @@ export function AdminInternshipsPage() {
       `"${(a.why_growlancer || '').replace(/"/g, '""')}"`,
       a.weekly_availability?.toString() || '', `"${(a.notes || '').replace(/"/g, '""')}"`,
     ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -685,9 +681,8 @@ export function AdminInternshipsPage() {
                 </div>
               )}
             </div>
-          ))
-        )}
-        </>
+          ))}
+          </>
         )}
       </div>
     </div>
