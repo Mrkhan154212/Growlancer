@@ -25,6 +25,12 @@ import {
   MoreHorizontal,
   X,
   Link2,
+  CheckSquare,
+  Square,
+  FilterX,
+  Upload,
+  History,
+  CheckCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -100,6 +106,12 @@ export function AdminInternshipsPage() {
   const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('applied');
   const [notesInput, setNotesInput] = useState<Record<string, string>>({});
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<ApplicationStatus>('shortlisted');
+  const [emailLogs, setEmailLogs] = useState<Record<string, { status: string; sent: boolean; time: string }[]>>({});
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
@@ -112,6 +124,8 @@ export function AdminInternshipsPage() {
 
       if (roleFilter !== 'all') query = query.eq('role_id', roleFilter);
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+      if (dateFrom) query = query.gte('created_at', new Date(dateFrom).toISOString());
+      if (dateTo) query = query.lte('created_at', new Date(dateTo + 'T23:59:59').toISOString());
 
       const { data, error } = await query;
       if (error) throw error;
@@ -121,7 +135,7 @@ export function AdminInternshipsPage() {
     } finally {
       setLoading(false);
     }
-  }, [roleFilter, statusFilter]);
+  }, [roleFilter, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => { fetchApplications(); }, [fetchApplications]);
 
@@ -152,6 +166,11 @@ export function AdminInternshipsPage() {
       }
       setStatusChangeId(null);
       setNotesInput(prev => ({ ...prev, [id]: '' }));
+      // Track email log
+      setEmailLogs(prev => ({
+        ...prev,
+        [id]: [...(prev[id] || []), { status, sent: true, time: new Date().toISOString() }],
+      }));
       await fetchApplications();
     } catch (err) {
       console.error('Status update error:', err);
@@ -180,6 +199,77 @@ export function AdminInternshipsPage() {
       (a.country?.toLowerCase().includes(q) ?? false)
     );
   });
+
+  const handleBulkStatusUpdate = async () => {
+    if (selectedIds.size === 0) return;
+    setActionLoading('bulk');
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await supabase.functions.invoke('internship-applications', {
+          method: 'PATCH',
+          body: { application_id: id, status: bulkStatus },
+        }).catch(() =>
+          supabase.from('internship_applications').update({ status: bulkStatus }).eq('id', id)
+        );
+        // Track email log
+        setEmailLogs(prev => ({
+          ...prev,
+          [id]: [...(prev[id] || []), { status: bulkStatus, sent: true, time: new Date().toISOString() }],
+        }));
+      }
+      setSelectedIds(new Set());
+      await fetchApplications();
+    } catch (err) {
+      console.error('Bulk update error:', err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Full Name', 'Email', 'Role', 'Status', 'Applied Date', 'LinkedIn', 'GitHub', 'Portfolio', 'University', 'Degree', 'Country', 'Phone', 'Cover Letter', 'Why Growlancer', 'Weekly Availability', 'Notes'];
+    const rows = filteredApplications.map(a => [
+      a.full_name, a.email, a.role_name, a.status, a.created_at,
+      a.linkedin_url || '', a.github_url || '', a.portfolio_url || '',
+      a.university || '', a.degree || '', a.country || '', a.phone || '',
+      `"${(a.cover_letter || '').replace(/"/g, '""')}"`,
+      `"${(a.why_growlancer || '').replace(/"/g, '""')}"`,
+      a.weekly_availability?.toString() || '', `"${(a.notes || '').replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `internship-applications-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredApplications.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredApplications.map(a => a.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setRoleFilter('all');
+    setStatusFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const stats = {
     total: applications.length,
@@ -215,38 +305,89 @@ export function AdminInternshipsPage() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
-        style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem' }}>
-        <div className="flex items-center gap-3 flex-1 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by name, email, university..." className="w-full pl-9 pr-3 py-2 bg-slate-800/50 border border-white/5 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
+      {/* Filters + Actions */}
+      <div className="space-y-3" style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '1rem', padding: '1rem' }}>
+        {/* Row 1: Search + Filters */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div className="flex items-center gap-3 flex-1 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search by name, email, university..." className="w-full pl-9 pr-3 py-2 bg-slate-800/50 border border-white/5 rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
+            </div>
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+              className="bg-slate-800 border border-white/5 text-[10px] font-bold uppercase rounded-lg px-3 py-2 text-slate-300 cursor-pointer min-w-[120px]">
+              <option value="all">All Roles</option>
+              <option value="frontend-dev">Frontend</option>
+              <option value="backend-supabase">Backend</option>
+              <option value="qa-testing">QA</option>
+              <option value="ui-ux-design">UI/UX</option>
+            </select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="bg-slate-800 border border-white/5 text-[10px] font-bold uppercase rounded-lg px-3 py-2 text-slate-300 cursor-pointer min-w-[120px]">
+              <option value="all">All Status</option>
+              <option value="applied">Applied</option>
+              <option value="shortlisted">Shortlisted</option>
+              <option value="interview_scheduled">Interview</option>
+              <option value="selected">Selected</option>
+              <option value="rejected">Rejected</option>
+            </select>
           </div>
-          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
-            className="bg-slate-800 border border-white/5 text-[10px] font-bold uppercase rounded-lg px-3 py-2 text-slate-300 cursor-pointer min-w-[140px]">
-            <option value="all">All Roles</option>
-            <option value="frontend-dev">Frontend</option>
-            <option value="backend-supabase">Backend</option>
-            <option value="qa-testing">QA</option>
-            <option value="ui-ux-design">UI/UX</option>
-          </select>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            className="bg-slate-800 border border-white/5 text-[10px] font-bold uppercase rounded-lg px-3 py-2 text-slate-300 cursor-pointer min-w-[140px]">
-            <option value="all">All Status</option>
-            <option value="applied">Applied</option>
-            <option value="shortlisted">Shortlisted</option>
-            <option value="interview_scheduled">Interview</option>
-            <option value="selected">Selected</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <div className="flex items-center gap-2">
+            {/* CSV Export */}
+            <button onClick={handleExportCSV}
+              className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-emerald-400 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
+              <Download className="w-3.5 h-3.5" /> CSV
+            </button>
+            {/* Refresh */}
+            <button onClick={fetchApplications}
+              className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
         </div>
-        <button onClick={fetchApplications}
-          className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
-          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </button>
+        {/* Row 2: Date Range */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Calendar className="w-3.5 h-3.5 text-slate-500" />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="bg-slate-800/50 border border-white/5 text-xs text-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+          <span className="text-xs text-slate-500">to</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="bg-slate-800/50 border border-white/5 text-xs text-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+          {(dateFrom || dateTo || searchQuery || roleFilter !== 'all' || statusFilter !== 'all') && (
+            <button onClick={clearFilters}
+              className="flex items-center gap-1 text-[10px] font-bold text-red-400 hover:text-red-300 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+              <FilterX className="w-3 h-3" /> Clear
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-4 z-50 flex items-center justify-between px-5 py-3 rounded-2xl animate-fade-in"
+          style={{ background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-white">{selectedIds.size} selected</span>
+            <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value as ApplicationStatus)}
+              className="bg-slate-800 border border-white/10 text-[10px] font-bold uppercase rounded-lg px-3 py-2 text-slate-300 cursor-pointer">
+              <option value="shortlisted">→ Shortlist</option>
+              <option value="interview_scheduled">→ Interview</option>
+              <option value="selected">→ Select</option>
+              <option value="rejected">→ Reject</option>
+            </select>
+            <button onClick={handleBulkStatusUpdate} disabled={actionLoading === 'bulk'}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+              {actionLoading === 'bulk' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
+              Apply
+            </button>
+          </div>
+          <button onClick={() => setSelectedIds(new Set())}
+            className="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+            Clear Selection
+          </button>
+        </div>
+      )}
 
       {/* Applications List */}
       <div className="space-y-3">
@@ -260,7 +401,25 @@ export function AdminInternshipsPage() {
             <p className="text-sm">No applications found</p>
           </div>
         ) : (
-          filteredApplications.map(app => (
+          <>
+            {/* Select All Header */}
+            {filteredApplications.length > 0 && (
+              <div className="flex items-center gap-3 px-1 py-1" style={{ color: '#64748B' }}>
+                <button
+                  ref={selectAllRef}
+                  onClick={toggleSelectAll}
+                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider hover:text-emerald-400 transition-colors"
+                >
+                  {selectedIds.size === filteredApplications.length ? (
+                    <CheckSquare className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Square className="w-4 h-4" />
+                  )}
+                  {selectedIds.size === filteredApplications.length ? 'Deselect All' : 'Select All'} ({filteredApplications.length})
+                </button>
+              </div>
+            )}
+          {filteredApplications.map(app => (
             <div
               key={app.id}
               className="rounded-2xl overflow-hidden transition-all duration-200"
@@ -268,10 +427,21 @@ export function AdminInternshipsPage() {
             >
               {/* Card Header */}
               <div
-                className="p-5 flex items-start justify-between gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors"
-                onClick={() => setExpandedId(expandedId === app.id ? null : app.id)}
+                className="p-5 flex items-start justify-between gap-4"
               >
-                <div className="flex items-start gap-4 flex-1 min-w-0">
+                <div className="flex items-start gap-4 flex-1 min-w-0 cursor-pointer"
+                  onClick={() => setExpandedId(expandedId === app.id ? null : app.id)}>
+                  {/* Bulk Select Checkbox */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(app.id); }}
+                    className="mt-0.5 shrink-0 hover:text-emerald-400 transition-colors"
+                  >
+                    {selectedIds.has(app.id) ? (
+                      <CheckSquare className="w-5 h-5 text-emerald-400" />
+                    ) : (
+                      <Square className="w-5 h-5 text-slate-500" />
+                    )}
+                  </button>
                   <div className="h-12 w-12 rounded-xl bg-slate-700 flex items-center justify-center text-sm font-bold text-white shrink-0">
                     {app.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                   </div>
@@ -290,7 +460,8 @@ export function AdminInternshipsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 cursor-pointer"
+                  onClick={() => setExpandedId(expandedId === app.id ? null : app.id)}>
                   {expandedId === app.id ? (
                     <ChevronUp className="w-5 h-5 text-slate-500" />
                   ) : (
@@ -465,6 +636,29 @@ export function AdminInternshipsPage() {
                     </div>
                   )}
 
+                  {/* Email Log */}
+                  {emailLogs[app.id] && emailLogs[app.id].length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <History className="w-3.5 h-3.5" /> Email Log
+                      </h4>
+                      <div className="space-y-1.5">
+                        {emailLogs[app.id].map((log, i) => (
+                          <div key={i} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs" style={{ background: 'rgba(15, 23, 42, 0.5)' }}>
+                            <Mail className={`w-3 h-3 ${log.sent ? 'text-emerald-400' : 'text-red-400'}`} />
+                            <span className="text-slate-300 font-medium uppercase text-[10px]">{log.status.replace('_', ' ')}</span>
+                            <span className="text-slate-500">•</span>
+                            <span className={`text-[10px] ${log.sent ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {log.sent ? 'Email Sent' : 'Failed'}
+                            </span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-slate-500 text-[10px]">{formatRelativeTime(log.time)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Notes */}
                   <div>
                     <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Admin Notes</h4>
@@ -492,6 +686,8 @@ export function AdminInternshipsPage() {
               )}
             </div>
           ))
+        )}
+        </>
         )}
       </div>
     </div>
