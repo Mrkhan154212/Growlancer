@@ -1,5 +1,4 @@
 ﻿import { Link } from 'react-router-dom';
-import { NewsletterForm } from './NewsletterForm';
 
 type SiteFooterProps = {
   onOpenSignup?: (role?: 'freelancer' | 'client') => void;
@@ -61,10 +60,6 @@ export function SiteFooter({ onOpenSignup }: SiteFooterProps) {
             </ul>
           </div>
 
-          {/* Newsletter */}
-          <div className="lg:col-span-4 sm:col-span-2">
-            <NewsletterForm />
-          </div>
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">

@@ -4,6 +4,7 @@ import { ROUTES } from '../routes';
 import { Activity, AlertCircle, ArrowRight, BadgeCheck, BarChart3, BriefcaseBusiness, CalendarCheck, CheckCircle2, CheckSquare, ClipboardCheck, ClipboardList, Clock3, Cpu, Eye, Files, Flag, FolderKanban, GitCompare, Handshake, Layers, LayoutDashboard, Loader2, Lock, LockKeyhole, MessageSquareText, MessagesSquare, Receipt, ScanText, ShieldCheck, Sparkles, Target, Timer, Users, View, Wallet, Wand2, Workflow, X, Zap,  } from 'lucide-react';
 import { useCategories } from '../hooks/useCategories';
 import { CategoriesSection as CategoriesSectionComponent } from '../components/CategoriesSection';
+import { supabase } from '../lib/supabase';
 // Hero Section Component
 function HeroSection({ onOpenSignup }: { onOpenSignup: (role?: 'freelancer' | 'client') => void }) {
   const [videoFailed, setVideoFailed] = useState(false);
@@ -773,15 +774,32 @@ function WaitlistSection() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
     setIsLoading(true);
-    // Simulate waitlist signup — replace with actual endpoint when ready
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setSubmitted(true);
-    setIsLoading(false);
+    setError('');
+    
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('newsletter-subscribe', {
+        method: 'POST',
+        body: { email: email.trim() },
+      });
+      
+      if (fnError || !data?.success) {
+        setError(data?.error || 'Something went wrong. Try again.');
+        setIsLoading(false);
+        return;
+      }
+      
+      setSubmitted(true);
+      setIsLoading(false);
+    } catch {
+      setError('Network error. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   if (submitted) {
@@ -849,6 +867,9 @@ function WaitlistSection() {
                     )}
                   </button>
                 </form>
+                {error && (
+                  <p className="mt-2 text-xs text-red-400">{error}</p>
+                )}
                 <p className="mt-3 text-xs text-white/50">
                   No spam. Unsubscribe anytime.
                 </p>
