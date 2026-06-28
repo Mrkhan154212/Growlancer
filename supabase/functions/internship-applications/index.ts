@@ -49,10 +49,13 @@ async function sendBrevoEmail(
   htmlContent: string
 ): Promise<boolean> {
   try {
+    const key = Deno.env.get('BREVO_API_KEY') ?? ''
+    console.log('BREVO_API_KEY length:', key.length, 'prefix:', key.substring(0, 15))
+    
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
-        'api-key': BREVO_API_KEY,
+        'api-key': key,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
@@ -64,10 +67,10 @@ async function sendBrevoEmail(
       }),
     })
 
+    const text = await res.text()
+    console.error('Brevo API response:', res.status, text)
+    
     if (!res.ok) {
-      const text = await res.text()
-      console.error('Brevo API error:', res.status, text)
-      // Return error info so we can debug
       return false
     }
     return true
