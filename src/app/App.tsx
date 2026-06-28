@@ -256,9 +256,21 @@ const OnboardingPage = lazy(() =>
   import('@pages/OnboardingPage').then(m => ({ default: m.OnboardingPage }))
 );
 
-// Auth Callback Page (for Google/LinkedIn OAuth)
+// Auth Pages (Email Verification, Password Reset, Magic Link, etc.)
 const AuthCallbackPage = lazy(() =>
   import('@pages/AuthCallbackPage').then(m => ({ default: m.AuthCallbackPage }))
+);
+const ForgotPasswordPage = lazy(() =>
+  import('@pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage }))
+);
+const ResetPasswordPage = lazy(() =>
+  import('@pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage }))
+);
+const MagicLinkPage = lazy(() =>
+  import('@pages/auth/MagicLinkPage').then(m => ({ default: m.MagicLinkPage }))
+);
+const EmailConfirmPage = lazy(() =>
+  import('@pages/auth/EmailConfirmPage').then(m => ({ default: m.EmailConfirmPage }))
 );
 
 // System Pages
@@ -316,8 +328,12 @@ function App() {
                 <Route path="contests/:contestId" element={<ContestDetailPage />} />
               </Route>
 
-              {/* Auth Callback - for Google/LinkedIn OAuth redirects */}
+              {/* Auth Email Action Routes */}
               <Route path="auth/callback" element={<AuthCallbackPage />} />
+              <Route path="auth/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="auth/reset-password" element={<ResetPasswordPage />} />
+              <Route path="auth/magic-link" element={<MagicLinkPage />} />
+              <Route path="auth/email-confirm" element={<EmailConfirmPage />} />
 
               {/* Debug route is only available in development */}
               {isDev && DevDebugPage && <Route path="/debug" element={<DevDebugPage />} />}

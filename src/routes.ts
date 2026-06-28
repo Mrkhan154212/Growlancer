@@ -105,6 +105,13 @@ export const ROUTES = {
     CLIENT: '/onboarding/client',
   },
   
+  // Auth Email Action Routes
+  FORGOT_PASSWORD: '/auth/forgot-password',
+  RESET_PASSWORD: '/auth/reset-password',
+  MAGIC_LINK: '/auth/magic-link',
+  EMAIL_CONFIRM: '/auth/email-confirm',
+  AUTH_CALLBACK: '/auth/callback',
+
   // Public routes
   PUBLIC: {
     FREELANCER_PROFILE: '/freelancer/:freelancerId',

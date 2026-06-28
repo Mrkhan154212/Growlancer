@@ -222,6 +222,10 @@ export function LoginModal({ isOpen, onClose, onSwitchToSignup }: LoginModalProp
               </label>
               <button
                 type="button"
+                onClick={() => {
+                  onClose();
+                  navigate('/auth/forgot-password');
+                }}
                 className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
               >
                 Forgot Password?
