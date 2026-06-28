@@ -481,33 +481,86 @@ serve(async (req) => {
         )
       }
 
-      // Insert the application
-      const { data: application, error: insertError } = await supabaseClient
+      // 🆕 Check if applicant already exists (same email) — update to 'applied' instead of duplicate
+      const { data: existingApp } = await supabaseClient
         .from('internship_applications')
-        .insert({
-          full_name, email,
-          phone: phone || null, country: country || null,
-          university: university || null, degree: degree || null,
-          graduation_year: graduation_year || null, role_id, role_name,
-          linkedin_url: linkedin_url || null,
-          google_meet_link: google_meet_link || null,
-          github_url: github_url || null, portfolio_url: portfolio_url || null,
-          resume_url: resume_url || null,
-          resume_file_path: resume_file_path || null,
-          resume_file_name: resume_file_name || null,
-          cover_letter,
-          why_growlancer: why_growlancer || null,
-          weekly_availability: weekly_availability || null,
-          available_from: available_from || null, available_to: available_to || null,
-          status: 'applied',
-        })
-        .select()
-        .single()
+        .select('id, status')
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-      if (insertError) {
-        console.error('Insert error:', JSON.stringify(insertError))
+      let application: Record<string, unknown> = {}
+      let insertError: { message: string; code: string } | null = null
+      let isReapply = false
+
+      if (existingApp) {
+        // Existing applicant — update record back to 'applied' with fresh data
+        isReapply = true
+        const { data: updated, error: updateErr } = await supabaseClient
+          .from('internship_applications')
+          .update({
+            full_name, email,
+            phone: phone || null, country: country || null,
+            university: university || null, degree: degree || null,
+            graduation_year: graduation_year || null, role_id, role_name,
+            linkedin_url: linkedin_url || null,
+            google_meet_link: google_meet_link || null,
+            github_url: github_url || null, portfolio_url: portfolio_url || null,
+            resume_url: resume_url || null,
+            resume_file_path: resume_file_path || null,
+            resume_file_name: resume_file_name || null,
+            cover_letter,
+            why_growlancer: why_growlancer || null,
+            weekly_availability: weekly_availability || null,
+            available_from: available_from || null, available_to: available_to || null,
+            status: 'applied',
+            notes: null,
+          })
+          .eq('id', existingApp.id)
+          .select()
+          .single()
+
+        if (updateErr) {
+          insertError = updateErr
+        } else {
+          application = updated as Record<string, unknown>
+        }
+      } else {
+        // New applicant — insert fresh record
+        const { data: inserted, error: insertErr } = await supabaseClient
+          .from('internship_applications')
+          .insert({
+            full_name, email,
+            phone: phone || null, country: country || null,
+            university: university || null, degree: degree || null,
+            graduation_year: graduation_year || null, role_id, role_name,
+            linkedin_url: linkedin_url || null,
+            google_meet_link: google_meet_link || null,
+            github_url: github_url || null, portfolio_url: portfolio_url || null,
+            resume_url: resume_url || null,
+            resume_file_path: resume_file_path || null,
+            resume_file_name: resume_file_name || null,
+            cover_letter,
+            why_growlancer: why_growlancer || null,
+            weekly_availability: weekly_availability || null,
+            available_from: available_from || null, available_to: available_to || null,
+            status: 'applied',
+          })
+          .select()
+          .single()
+
+        if (insertErr) {
+          insertError = insertErr
+        } else {
+          application = inserted as Record<string, unknown>
+        }
+      }
+
+      if (insertError || !application) {
+        console.error('Application save error:', JSON.stringify(insertError))
         return new Response(
-          JSON.stringify({ error: 'Failed to submit application.', details: insertError.message, code: insertError.code }),
+          JSON.stringify({ error: 'Failed to submit application.', details: insertError?.message, code: insertError?.code }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -566,9 +619,10 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           application_id: application.id,
+          is_reapplication: isReapply,
           emails_sent: { admin: adminEmailSent, applicant: applicantEmailSent, under_review: underReviewSent },
         }),
-        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 

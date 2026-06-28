@@ -9,7 +9,8 @@ export type HireFromProposalResult =
   | { success: true; contractId: string }
   | { success: false; error: string };
 
-/** Accept proposal and create contract (+ escrow shell via RPC when available). */
+/** Accept proposal and create contract (+ escrow shell via RPC when available).
+ * Also sends email notification to the freelancer via proposal-notifications edge function. */
 export async function hireFreelancerFromProposal(
   proposalId: string,
   clientId: string,
@@ -40,6 +41,8 @@ export async function hireFreelancerFromProposal(
       if (!fallback.success || !fallback.data) {
         return { success: false, error: error.message || fallback.error || 'Failed to create contract' };
       }
+      // Send email notification even if RPC failed, fallback worked
+      await sendProposalNotification(proposalId, 'accept');
       return { success: true, contractId: fallback.data.id };
     }
 
@@ -56,9 +59,13 @@ export async function hireFreelancerFromProposal(
       if (!fallback.success || !fallback.data) {
         return { success: false, error: 'Contract created but id missing' };
       }
+      // Send email notification
+      await sendProposalNotification(proposalId, 'accept');
       return { success: true, contractId: fallback.data.id };
     }
 
+    // Send email notification to the hired freelancer
+    await sendProposalNotification(proposalId, 'accept');
     return { success: true, contractId };
   }
 
@@ -66,6 +73,8 @@ export async function hireFreelancerFromProposal(
   if (!result.success || !result.data) {
     return { success: false, error: result.error || 'Failed to create contract' };
   }
+  // Send email notification
+  await sendProposalNotification(proposalId, 'accept');
   return { success: true, contractId: result.data.id };
 }
 
@@ -81,5 +90,22 @@ export async function inviteFreelancerToProject(
 }
 
 export async function rejectProposal(proposalId: string): Promise<boolean> {
-  return proposalsService.reject(proposalId);
+  const ok = await proposalsService.reject(proposalId);
+  if (ok) {
+    // Send rejection email to freelancer (fire-and-forget)
+    await sendProposalNotification(proposalId, 'reject');
+  }
+  return ok;
+}
+
+/** Call the proposal-notifications edge function to send email + in-app notification. */
+async function sendProposalNotification(proposalId: string, action: 'accept' | 'reject'): Promise<void> {
+  try {
+    await supabase.functions.invoke('proposal-notifications', {
+      method: 'POST',
+      body: { proposal_id: proposalId, action },
+    });
+  } catch (err) {
+    console.error(`Failed to send proposal ${action} notification:`, err);
+  }
 }
