@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Zap, Crown, Loader2, RefreshCw, Search, Ban, Mail, RotateCcw, Clock
 } from 'lucide-react';
+import { adminQuery, adminUpdate } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 
 interface SubscriptionPlan {
@@ -40,15 +41,15 @@ export function AdminSubscriptionsPage() {
     setLoading(true);
     try {
       const [plansRes, subsRes] = await Promise.all([
-        supabase.from('subscription_plans').select('*').order('price'),
-        supabase.from('subscriptions').select('*').order('created_at', { ascending: false }).limit(100),
+        adminQuery({ table: 'subscription_plans', select: '*', order: 'price', orderDir: 'asc' }),
+        adminQuery({ table: 'subscriptions', select: '*', order: 'created_at', orderDir: 'desc', limit: 100 }),
       ]);
 
       const plansData = (plansRes.data || []) as SubscriptionPlan[];
       const subsData = (subsRes.data || []) as UserSubscription[];
 
       const userIds = [...new Set(subsData.map(s => s.user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+      const { data: profiles } = await adminQuery({ table: 'profiles', select: 'id, name, email', in: { id: userIds } });
       const profileMap = new Map((profiles || []).map(p => [p.id, { name: p.name, email: p.email }]));
       const planMap = new Map(plansData.map(p => [p.id, { name: p.name, price: p.price }]));
 
@@ -77,12 +78,12 @@ export function AdminSubscriptionsPage() {
     if (!confirm(`🚫 Cancel subscription for "${userName}"? They will lose Pro access immediately.`)) return;
     setActionLoading(`cancel-${subId}`);
     try {
-      await supabase.from('subscriptions').update({
+      await adminUpdate('subscriptions', subId, {
         status: 'cancelled',
         end_date: new Date().toISOString(),
         cancel_at_period_end: true,
         updated_at: new Date().toISOString(),
-      }).eq('id', subId);
+      });
       await fetchData();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); }
@@ -92,11 +93,11 @@ export function AdminSubscriptionsPage() {
     if (!confirm(`🔄 Reactivate subscription for "${userName}"? They will regain Pro access.`)) return;
     setActionLoading(`reactivate-${subId}`);
     try {
-      await supabase.from('subscriptions').update({
+      await adminUpdate('subscriptions', subId, {
         status: 'active',
         cancel_at_period_end: false,
         updated_at: new Date().toISOString(),
-      }).eq('id', subId);
+      });
       await fetchData();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); }

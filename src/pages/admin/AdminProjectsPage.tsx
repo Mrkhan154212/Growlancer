@@ -4,6 +4,7 @@ import {
   Eye, Loader2, RefreshCw, Search, CheckCircle, XCircle,
   ArrowRight
 } from 'lucide-react';
+import { adminQuery, adminUpdate } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 
 interface AdminProject {
@@ -48,18 +49,21 @@ export function AdminProjectsPage() {
   const fetchProjects = useCallback(async () => {
     setLoading(true);
     try {
-      let query = (supabase.from('projects') as any)
-        .select('id, title, description, budget_min, budget_max, status, category, skills, client_id, created_at, visibility')
-        .order('created_at', { ascending: false })
-        .limit(100);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+      const opts: any = {
+        table: 'projects',
+        select: 'id, title, description, budget_min, budget_max, status, category, skills, client_id, created_at, visibility',
+        order: 'created_at',
+        orderDir: 'desc',
+        limit: 100,
+      };
+      if (statusFilter !== 'all') opts.filters = { status: statusFilter };
 
-      const { data, error } = await query;
+      const { data, error } = await adminQuery(opts);
       if (error) throw error;
 
       const projs = (data || []) as AdminProject[];
       const clientIds = [...new Set(projs.map(p => p.client_id))];
-      const { data: clients } = await supabase.from('profiles').select('id, name, email').in('id', clientIds);
+      const { data: clients } = await adminQuery({ table: 'profiles', select: 'id, name, email', in: { id: clientIds } });
       const clientMap = new Map((clients || []).map(c => [c.id, { name: c.name, email: c.email }]));
       const projectsWithClients = projs.map(p => ({ ...p, client: clientMap.get(p.client_id) || null }));
 
@@ -90,7 +94,7 @@ export function AdminProjectsPage() {
     if (!confirm(`Update "${title}" status to "${status.replace('_', ' ')}"?`)) return;
     setActionLoading(`${projectId}-${status}`);
     try {
-      await supabase.from('projects').update({ status, updated_at: new Date().toISOString() }).eq('id', projectId);
+      await adminUpdate('projects', projectId, { status, updated_at: new Date().toISOString() });
       await fetchProjects();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }

@@ -3,6 +3,7 @@ import {
   BarChart3, TrendingUp, Users, DollarSign, Briefcase, Handshake,
   Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, Activity, Zap
 } from 'lucide-react';
+import { adminQuery, adminCounts } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 
 function formatCurrency(amount: number): string {
@@ -32,34 +33,29 @@ export function AdminReportsPage() {
       const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
       const [
-        { count: totalUsers },
-        { count: freelancers },
-        { count: clients },
-        { count: openProjects },
-        { count: activeContracts },
-        { data: allContracts },
-        { count: pendingDisputes },
-        { count: newUsers },
-        { count: lastMonthUsers },
-        { data: lastMonthContracts },
+        totalUsers, freelancers, clients,
+        openProjects, activeContracts,
+        allContracts, pendingDisputes,
+        newUsers, lastMonthUsers,
+        lastMonthContracts,
       ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'freelancer'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'client'),
-        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('contracts').select('*', { count: 'exact', head: true }).in('status', ['active', 'in_progress']),
-        supabase.from('contracts').select('amount, platform_fee, created_at'),
-        supabase.from('disputes' as any).select('*', { count: 'exact', head: true }).in('status', ['pending', 'under_review']),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', twoMonthsAgo).lt('created_at', monthAgo),
-        supabase.from('contracts').select('amount').gte('created_at', twoMonthsAgo).lt('created_at', monthAgo),
+        adminQuery({ table: 'profiles', count: 'exact', head: true }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'freelancer' } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'client' } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'projects', count: 'exact', head: true, filters: { status: 'open' } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'contracts', count: 'exact', head: true, in: { status: ['active', 'in_progress'] } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'contracts', select: 'amount, platform_fee, created_at' }).then(r => ({ data: r.data })),
+        adminQuery({ table: 'disputes', count: 'exact', head: true, in: { status: ['pending', 'under_review'] } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, gte: { created_at: monthAgo } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, gte: { created_at: twoMonthsAgo } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'contracts', select: 'amount', gte: { created_at: twoMonthsAgo } }).then(r => ({ data: r.data })),
       ]);
 
-      const contractsData = (allContracts || []) as Array<{ amount: number; platform_fee: number }>;
+      const contractsData = ((allContracts as any)?.data || []) as Array<{ amount: number; platform_fee: number }>;
       const totalGmv = contractsData.reduce((s, c) => s + (c.amount || 0), 0);
       const totalFees = contractsData.reduce((s, c) => s + (c.platform_fee || 0), 0);
       const userGrowth = (lastMonthUsers && lastMonthUsers > 0) ? ((newUsers! - lastMonthUsers!) / lastMonthUsers!) * 100 : 12;
-      const lastGmv = ((lastMonthContracts || []) as Array<{ amount: number }>).reduce((s, c) => s + (c.amount || 0), 0);
+      const lastGmv = (((lastMonthContracts as any)?.data || []) as Array<{ amount: number }>).reduce((s, c) => s + (c.amount || 0), 0);
       const gmvGrowth = lastGmv > 0 ? ((totalGmv - lastGmv) / lastGmv) * 100 : 8.4;
 
       setMetrics({

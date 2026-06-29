@@ -20,6 +20,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
+import { adminQuery, adminCounts, adminUpdate } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 import type { UserRole } from '../../types/auth';
 
@@ -66,28 +67,21 @@ export function AdminUsersPage() {
   // Fetch platform-wide stats accurately (no limit, full counts)
   const fetchStats = useCallback(async () => {
     try {
-      const [
-        { count: totalAll },
-        { count: freelancers },
-        { count: clients },
-        { count: admins },
-        { count: pro },
-        { count: active },
-      ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).is('deleted_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'freelancer').is('deleted_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'client').is('deleted_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin').is('deleted_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_pro', true).is('deleted_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('onboarding_completed', true).is('deleted_at', null),
+      const [totalRes, freelancerRes, clientRes, adminRes, proRes, activeRes] = await Promise.all([
+        adminQuery({ table: 'profiles', count: 'exact', head: true, isNull: { deleted_at: true } }),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'freelancer' }, isNull: { deleted_at: true } }),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'client' }, isNull: { deleted_at: true } }),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'admin' }, isNull: { deleted_at: true } }),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { is_pro: 'true' }, isNull: { deleted_at: true } }),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { onboarding_completed: 'true' }, isNull: { deleted_at: true } }),
       ]);
       setStatsData({
-        total: totalAll || 0,
-        freelancers: freelancers || 0,
-        clients: clients || 0,
-        admins: admins || 0,
-        pro: pro || 0,
-        active: active || 0,
+        total: totalRes.total || 0,
+        freelancers: freelancerRes.total || 0,
+        clients: clientRes.total || 0,
+        admins: adminRes.total || 0,
+        pro: proRes.total || 0,
+        active: activeRes.total || 0,
       });
     } catch (err) {
       console.error('Failed to fetch user stats:', err);
@@ -97,20 +91,20 @@ export function AdminUsersPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('profiles')
-        .select('id, email, name, role, avatar, created_at, is_pro, onboarding_completed, referral_code, suspended_at, suspend_reason, deleted_at')
-        .is('deleted_at', null)
-        .is('suspended_at', null)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const opts: any = {
+        table: 'profiles',
+        select: 'id, email, name, role, avatar, created_at, is_pro, onboarding_completed, referral_code, suspended_at, suspend_reason, deleted_at',
+        isNull: { deleted_at: true, suspended_at: true },
+        order: 'created_at',
+        orderDir: 'desc',
+        limit: 100,
+      };
+      if (roleFilter !== 'all') opts.filters = { role: roleFilter };
+      if (statusFilter === 'active') opts.filters = { ...opts.filters, onboarding_completed: 'true' };
+      if (statusFilter === 'pending') opts.filters = { ...opts.filters, onboarding_completed: 'false' };
+      if (statusFilter === 'pro') opts.filters = { ...opts.filters, is_pro: 'true' };
 
-      if (roleFilter !== 'all') query = query.eq('role', roleFilter);
-      if (statusFilter === 'active') query = query.eq('onboarding_completed', true);
-      if (statusFilter === 'pending') query = query.eq('onboarding_completed', false);
-      if (statusFilter === 'pro') query = query.eq('is_pro', true);
-
-      const { data, error } = await query;
+      const { data, error } = await adminQuery(opts);
       if (error) throw error;
       setUsers((data || []) as AdminUser[]);
     } catch (err) {
@@ -148,7 +142,7 @@ export function AdminUsersPage() {
     if (!confirm(`✅ Verify "${userName}"? They will be marked as an active user.`)) return;
     setActionLoading(`verify-${userId}`);
     try {
-      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', userId);
+      await adminUpdate('profiles', userId, { onboarding_completed: true });
       await fetchUsers();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }
@@ -158,7 +152,7 @@ export function AdminUsersPage() {
     if (!confirm(`${currentPro ? '🔄 Remove Pro status from' : '⭐ Grant Pro status to'} "${userName}"?`)) return;
     setActionLoading(`pro-${userId}`);
     try {
-      await supabase.from('profiles').update({ is_pro: !currentPro }).eq('id', userId);
+      await adminUpdate('profiles', userId, { is_pro: !currentPro });
       await fetchUsers();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }
@@ -168,7 +162,7 @@ export function AdminUsersPage() {
     if (!confirm(`⚠️ Make "${userName}" an ADMIN? This gives full platform access.`)) return;
     setActionLoading(`admin-${userId}`);
     try {
-      await supabase.from('profiles').update({ role: 'admin' }).eq('id', userId);
+      await adminUpdate('profiles', userId, { role: 'admin' });
       await fetchUsers();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }
@@ -179,11 +173,10 @@ export function AdminUsersPage() {
     if (reason === null) return; // User cancelled prompt
     setActionLoading(`suspend-${userId}`);
     try {
-      await supabase.from('profiles').update({
+      await adminUpdate('profiles', userId, {
         suspended_at: new Date().toISOString(),
         suspend_reason: reason?.trim() || null,
-        suspended_by: (await supabase.auth.getUser()).data.user?.id || null,
-      }).eq('id', userId);
+      });
       await fetchUsers();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }
@@ -193,11 +186,10 @@ export function AdminUsersPage() {
     if (!confirm(`🔄 Reactivate "${userName}"? They will regain full platform access.`)) return;
     setActionLoading(`reactivate-${userId}`);
     try {
-      await supabase.from('profiles').update({
+      await adminUpdate('profiles', userId, {
         suspended_at: null,
         suspend_reason: null,
-        suspended_by: null,
-      }).eq('id', userId);
+      });
       await fetchUsers();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); setOpenDropdown(null); }

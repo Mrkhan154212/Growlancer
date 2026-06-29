@@ -45,15 +45,25 @@ export function AdminDashboardLayout() {
   useEffect(() => {
     if (!user) return;
     const fetchProfile = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('name, avatar')
-        .eq('id', user.id)
-        .single();
-      if (data) setAdminProfile({ name: data.name, avatar: data.avatar });
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user?.user_metadata) {
+          const meta = userData.user.user_metadata;
+          setAdminProfile({
+            name: meta.name || meta.full_name || userData.user.email || 'Admin',
+            avatar: meta.picture || meta.avatar_url || null,
+          });
+        }
+      } catch {
+        // Profile fetch is non-critical; just show fallback
+        setAdminProfile({ name: 'Admin', avatar: null });
+      }
     };
     fetchProfile();
   }, [user]);
+
+  // Remove supabase import if it was only used for profile fetch
+  // Note: No longer using direct DB query for profile (bypasses RLS)
 
   // Search functionality
   const handleSearch = (query: string) => {

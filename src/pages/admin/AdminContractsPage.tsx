@@ -3,6 +3,7 @@ import {
   Eye, Loader2, RefreshCw, Search, DollarSign,
   CheckCircle, XCircle, Lock, Unlock
 } from 'lucide-react';
+import { adminQuery, adminUpdate } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 
 interface AdminContract {
@@ -43,17 +44,21 @@ export function AdminContractsPage() {
   const fetchContracts = useCallback(async () => {
     setLoading(true);
     try {
-      let query = (supabase.from('contracts') as any)
-        .select('id, amount, platform_fee, status, escrow_funded, created_at, freelancer_id, client_id')
-        .order('created_at', { ascending: false }).limit(100);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+      const opts: any = {
+        table: 'contracts',
+        select: 'id, amount, platform_fee, status, escrow_funded, created_at, freelancer_id, client_id',
+        order: 'created_at',
+        orderDir: 'desc',
+        limit: 100,
+      };
+      if (statusFilter !== 'all') opts.filters = { status: statusFilter };
 
-      const { data, error } = await query;
+      const { data, error } = await adminQuery(opts);
       if (error) throw error;
 
       const cons = (data || []) as AdminContract[];
       const userIds = [...new Set(cons.flatMap(c => [c.freelancer_id, c.client_id]))];
-      const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+      const { data: profiles } = await adminQuery({ table: 'profiles', select: 'id, name, email', in: { id: userIds } });
       const profileMap = new Map((profiles || []).map(p => [p.id, { name: p.name, email: p.email }]));
 
       setContracts(cons.map(c => ({
@@ -78,7 +83,7 @@ export function AdminContractsPage() {
     if (!confirm(`Update contract status to "${status}"?`)) return;
     setActionLoading(`${contractId}-${status}`);
     try {
-      await supabase.from('contracts').update({ status, updated_at: new Date().toISOString() }).eq('id', contractId);
+      await adminUpdate('contracts', contractId, { status, updated_at: new Date().toISOString() });
       await fetchContracts();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); }
@@ -88,7 +93,7 @@ export function AdminContractsPage() {
     if (!confirm(`${currentlyFunded ? 'Mark escrow as pending' : 'Mark escrow as funded'} for this contract?`)) return;
     setActionLoading(`escrow-${contractId}`);
     try {
-      await supabase.from('contracts').update({ escrow_funded: !currentlyFunded, updated_at: new Date().toISOString() }).eq('id', contractId);
+      await adminUpdate('contracts', contractId, { escrow_funded: !currentlyFunded, updated_at: new Date().toISOString() });
       await fetchContracts();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); }

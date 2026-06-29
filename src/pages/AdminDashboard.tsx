@@ -5,7 +5,8 @@ import {
   RefreshCw, Scale, Shield, ShieldAlert, Star, Users, XCircle, Zap, Mail,
   TrendingUp
 } from 'lucide-react';
-import { supabase, realtimeChannels, tables } from '../lib/supabase';
+import { adminQuery, adminCounts, adminUpdate } from '../lib/adminDataProxy';
+import { supabase, realtimeChannels } from '../lib/supabase';
 import { disputeService, type DisputeCase } from '../lib/disputeService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -126,23 +127,23 @@ function PlatformStats() {
       const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
       const [
-        { count: totalUsers }, { count: freelancers }, { count: clients },
-        { count: activeProjects }, { count: liveContracts },
-        { count: pendingDisputes }, { data: contractsData },
-        { count: thisMonthUsers }, { count: lastMonthUsers },
-        { data: lastMonthContracts }, { count: flaggedProjects },
+        totalUsers, freelancers, clients,
+        activeProjects, liveContracts,
+        pendingDisputes, contractsData,
+        thisMonthUsers, lastMonthUsers,
+        lastMonthContracts, flaggedProjects,
       ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).is('deleted_at', null).is('suspended_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'freelancer').is('deleted_at', null).is('suspended_at', null),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'client').is('deleted_at', null).is('suspended_at', null),
-        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('contracts').select('*', { count: 'exact', head: true }).in('status', ['active', 'in_progress']),
-        tables.disputeCases().select('*', { count: 'exact', head: true }).in('status', ['pending', 'under_review']),
-        supabase.from('contracts').select('amount, platform_fee, created_at, status'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).is('deleted_at', null).is('suspended_at', null).gte('created_at', monthAgo),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).is('deleted_at', null).is('suspended_at', null).gte('created_at', twoMonthsAgo).lt('created_at', monthAgo),
-        supabase.from('contracts').select('amount').gte('created_at', twoMonthsAgo).lt('created_at', monthAgo),
-        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'flagged'),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, isNull: { deleted_at: true, suspended_at: true } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'freelancer' }, isNull: { deleted_at: true, suspended_at: true } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { role: 'client' }, isNull: { deleted_at: true, suspended_at: true } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'projects', count: 'exact', head: true, filters: { status: 'open' } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'contracts', count: 'exact', head: true, in: { status: ['active', 'in_progress'] } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'disputes', count: 'exact', head: true, in: { status: ['pending', 'under_review'] } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'contracts', select: 'amount, platform_fee, created_at, status' }).then(r => ({ data: r.data })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, isNull: { deleted_at: true, suspended_at: true }, gte: { created_at: monthAgo } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'profiles', count: 'exact', head: true, isNull: { deleted_at: true, suspended_at: true }, gte: { created_at: twoMonthsAgo } }).then(r => ({ count: r.total })),
+        adminQuery({ table: 'contracts', select: 'amount', gte: { created_at: twoMonthsAgo } }).then(r => ({ data: r.data })),
+        adminQuery({ table: 'projects', count: 'exact', head: true, filters: { status: 'flagged' } }).then(r => ({ count: r.total })),
       ]);
 
       const cData = (contractsData || []) as Array<{ amount: number; platform_fee: number; status: string }>;
@@ -229,10 +230,9 @@ function UserManagementTable() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      let q = supabase.from('profiles').select('*').is('deleted_at', null).is('suspended_at', null)
-        .order('created_at', { ascending: false }).limit(10);
-      if (roleFilter !== 'all') q = q.eq('role', roleFilter);
-      const { data } = await q;
+      const opts: any = { table: 'profiles', select: 'id, name, email, avatar, role, created_at, is_pro, onboarding_completed, rating', order: 'created_at', orderDir: 'desc', limit: 10, isNull: { deleted_at: true, suspended_at: true } };
+      if (roleFilter !== 'all') opts.filters = { role: roleFilter };
+      const { data } = await adminQuery(opts);
       setUsers((data || []) as AdminUser[]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -251,16 +251,14 @@ function UserManagementTable() {
 
   const handleTogglePro = async (userId: string, current: boolean | null, name: string) => {
     if (!confirm(`${current ? 'Remove' : 'Grant'} Pro status for "${name}"?`)) return;
-    setActionLoading(`pro-${userId}`);
-    await supabase.from('profiles').update({ is_pro: !current }).eq('id', userId);
+    setActionLoading(`pro-${userId}`);      await adminUpdate('profiles', userId, { is_pro: !current });
     await fetchUsers();
     setActionLoading(null);
   };
 
   const handleSuspend = async (userId: string, name: string) => {
     if (!confirm(`🚫 Suspend "${name}"? They will lose platform access.`)) return;
-    setActionLoading(`suspend-${userId}`);
-    await supabase.from('profiles').update({ deleted_at: new Date().toISOString() }).eq('id', userId);
+    setActionLoading(`suspend-${userId}`);      await adminUpdate('profiles', userId, { deleted_at: new Date().toISOString() });
     await fetchUsers();
     setActionLoading(null);
   };
@@ -450,9 +448,8 @@ function AIRiskAnalysis() {
       const detected: RiskItem[] = [];
 
       // 1. Rapid account signups (bot detection)
-      const { count: signups24h } = await supabase.from('profiles')
-        .select('*', { count: 'exact', head: true }).is('deleted_at', null)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+      const signupsRes = await adminQuery({ table: 'profiles', count: 'exact', head: true, isNull: { deleted_at: true }, gte: { created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() } }).then(r => r.total);
+      const signups24h = signupsRes;
       if (signups24h && signups24h > 15) {
         detected.push({ id: 'rapid-signups', icon: Users, iconBg: 'bg-red-500/20', iconColor: 'text-red-500',
           title: '🚨 Rapid Account Creation Spike', description: `${signups24h} accounts in 24h — possible bot activity. Investigate IP patterns.`,
@@ -464,9 +461,8 @@ function AIRiskAnalysis() {
       }
 
       // 2. Large escrow transactions (money laundering risk)
-      const { data: largeEscrows } = await supabase.from('contracts')
-        .select('id, amount, created_at').gt('amount', 15000)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).limit(5);
+      const largeRes = await adminQuery({ table: 'contracts', select: 'id, amount, created_at', gte: { created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }, limit: 5 }).then(r => r.data as any[]);
+      const largeEscrows = (largeRes || []).filter((c: any) => (c.amount || 0) > 15000) as any[];
       if (largeEscrows && largeEscrows.length > 1) {
         detected.push({ id: 'large-escrow', icon: DollarSign, iconBg: 'bg-orange-500/20', iconColor: 'text-orange-500',
           title: '💰 Large Escrow Deposits', description: `${largeEscrows.length} contracts over $15,000 this week. Total: ${formatCurrency(largeEscrows.reduce((s, c) => s + (c.amount || 0), 0))}.`,
@@ -474,9 +470,8 @@ function AIRiskAnalysis() {
       }
 
       // 3. Dispute spike detection
-      const { count: recentDisputes } = await tables.disputeCases()
-        .select('*', { count: 'exact', head: true }).in('status', ['pending', 'under_review'])
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+      const disputeRes = await adminQuery({ table: 'disputes', count: 'exact', head: true, in: { status: ['pending', 'under_review'] }, gte: { created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() } }).then(r => r.total);
+      const recentDisputes = disputeRes;
       if (recentDisputes && recentDisputes > 5) {
         detected.push({ id: 'dispute-spike', icon: Scale, iconBg: 'bg-red-500/20', iconColor: 'text-red-500',
           title: '⚖️ Dispute Activity Spike', description: `${recentDisputes} open disputes this week. Review pattern for common issues.`,
@@ -488,9 +483,8 @@ function AIRiskAnalysis() {
       }
 
       // 4. Unverified / inactive users
-      const { count: inactiveCount } = await supabase.from('profiles')
-        .select('*', { count: 'exact', head: true }).eq('onboarding_completed', false).is('deleted_at', null)
-        .lt('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString());
+      const inactiveRes = await adminQuery({ table: 'profiles', count: 'exact', head: true, filters: { onboarding_completed: 'false' }, isNull: { deleted_at: true }, lte: { created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() } }).then(r => r.total);
+      const inactiveCount = inactiveRes;
       if (inactiveCount && inactiveCount > 10) {
         detected.push({ id: 'inactive-users', icon: Ban, iconBg: 'bg-blue-500/20', iconColor: 'text-blue-500',
           title: 'Inactive Accounts Need Follow-up', description: `${inactiveCount} users haven't completed onboarding in 14+ days. Consider re-engagement email.`,
@@ -498,13 +492,15 @@ function AIRiskAnalysis() {
       }
 
       // 5. Unverified freelancers with high-value projects
-      const { data: riskyProjects } = await supabase.from('projects')
-        .select('id, title, budget_max, client_id').gt('budget_max', 5000)
-        .in('status', ['open', 'in_progress']).limit(5);
-      if (riskyProjects && riskyProjects.length > 0) {
-        const { data: clientProfiles } = await supabase.from('profiles')
-          .select('id, onboarding_completed').in('id', [...new Set(riskyProjects.map(p => p.client_id))]);
-        const unverifiedClients = (clientProfiles || []).filter(p => !p.onboarding_completed).length;
+      const riskyRes = await adminQuery({ table: 'projects', select: 'id, title, budget_max, client_id', in: { status: ['open', 'in_progress'] }, limit: 5 });
+      const riskyProjects = riskyRes.data as any[];
+      // Filter client-side for budget_max > 5000
+      const bigRiskyProjects = riskyProjects.filter((p: any) => (p.budget_max || 0) > 5000);
+      if (bigRiskyProjects && bigRiskyProjects.length > 0) {
+        const clientIds = [...new Set(bigRiskyProjects.map((p: any) => p.client_id))];
+        const clientRes = await adminQuery({ table: 'profiles', select: 'id, onboarding_completed', in: { id: clientIds } });
+        const clientProfiles = clientRes.data as any[];
+        const unverifiedClients = (clientProfiles || []).filter((p: any) => !p.onboarding_completed).length;
         if (unverifiedClients > 1) {
           detected.push({ id: 'unverified-clients', icon: ShieldAlert, iconBg: 'bg-amber-500/20', iconColor: 'text-amber-500',
             title: 'Unverified Clients with High-Value Projects', description: `${unverifiedClients} unverified clients posted projects over $5k. Flag for identity verification.`,
@@ -513,13 +509,11 @@ function AIRiskAnalysis() {
       }
 
       // 6. Failed payment rate check
-      const { count: failedPayments, data: paymentStats } = await supabase.from('transactions')
-        .select('id', { count: 'exact', head: true }).eq('status', 'failed')
-        .gte('created_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString());
+      const failedRes = await adminQuery({ table: 'transactions', count: 'exact', head: true, filters: { status: 'failed' }, gte: { created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() } });
+      const failedPayments = failedRes.total;
 
-      const { count: totalPayments } = await supabase.from('transactions')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString());
+      const totalRes = await adminQuery({ table: 'transactions', count: 'exact', head: true, gte: { created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() } });
+      const totalPayments = totalRes.total;
 
       const failRate = totalPayments && totalPayments > 0 ? ((failedPayments || 0) / totalPayments) * 100 : 0;
       if (failRate > 15) {
@@ -533,8 +527,8 @@ function AIRiskAnalysis() {
       }
 
       // 7. Escrow at risk (disputed/high-value)
-      const { data: atRiskContracts } = await supabase.from('contracts')
-        .select('id, amount').eq('status', 'disputed').limit(5);
+      const atRiskRes = await adminQuery({ table: 'contracts', select: 'id, amount', filters: { status: 'disputed' }, limit: 5 });
+      const atRiskContracts = atRiskRes.data as any[];
       const totalAtRisk = (atRiskContracts || []).reduce((s, c) => s + (c.amount || 0), 0);
       if (totalAtRisk > 25000) {
         detected.push({ id: 'escrow-risk', icon: ShieldAlert, iconBg: 'bg-red-500/20', iconColor: 'text-red-500',
@@ -543,14 +537,12 @@ function AIRiskAnalysis() {
       }
 
       // 8. Low rating trend
-      const { data: lowRatingContracts } = await supabase.from('contracts')
-        .select('id').eq('status', 'completed')
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()).limit(20);
+      const lowRatingRes = await adminQuery({ table: 'contracts', select: 'id', filters: { status: 'completed' }, gte: { created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() }, limit: 20 });
+      const lowRatingContracts = lowRatingRes.data as any[];
       if (lowRatingContracts && lowRatingContracts.length > 10) {
         // Check reviews for those contracts
-        const { count: lowReviews } = await supabase.from('reviews')
-          .select('*', { count: 'exact', head: true }).lt('rating', 3)
-          .in('contract_id', lowRatingContracts.map(c => c.id));
+        const lowReviewsRes = await adminQuery({ table: 'reviews', count: 'exact', head: true, in: { contract_id: lowRatingContracts.map((c: any) => c.id) } }).then(r => r.total);
+        const lowReviews = lowReviewsRes;
         if (lowReviews && lowReviews > 3) {
           detected.push({ id: 'quality-risk', icon: Award, iconBg: 'bg-amber-500/20', iconColor: 'text-amber-500',
             title: 'Quality Risk Detected', description: `${lowReviews} contracts with ratings under 3 stars this month. Freelancer quality review needed.`,
@@ -641,34 +633,34 @@ function LiveActivityFeed() {
   const fetchActivities = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
-        supabase.from('profiles').select('id, name, created_at, role').is('deleted_at', null).is('suspended_at', null).order('created_at', { ascending: false }).limit(3),
-        supabase.from('contracts').select('id, amount, created_at, status').order('created_at', { ascending: false }).limit(3),
-        tables.disputeCases().select('id, reason, created_at, status').order('created_at', { ascending: false }).limit(3),
-        supabase.from('projects').select('id, title, created_at, status').order('created_at', { ascending: false }).limit(3),
-        supabase.from('transactions').select('id, amount, created_at, type, status').in('status', ['completed', 'pending']).order('created_at', { ascending: false }).limit(3),
-        supabase.from('messages').select('id, created_at').order('created_at', { ascending: false }).limit(2),
+        adminQuery({ table: 'profiles', select: 'id, name, created_at, role', isNull: { deleted_at: true, suspended_at: true }, order: 'created_at', orderDir: 'desc', limit: 3 }),
+        adminQuery({ table: 'contracts', select: 'id, amount, created_at, status', order: 'created_at', orderDir: 'desc', limit: 3 }),
+        adminQuery({ table: 'disputes', select: 'id, reason, created_at, status', order: 'created_at', orderDir: 'desc', limit: 3 }),
+        adminQuery({ table: 'projects', select: 'id, title, created_at, status', order: 'created_at', orderDir: 'desc', limit: 3 }),
+        adminQuery({ table: 'transactions', select: 'id, amount, created_at, type, status', in: { status: ['completed', 'pending'] }, order: 'created_at', orderDir: 'desc', limit: 3 }),
+        adminQuery({ table: 'messages', select: 'id, created_at', order: 'created_at', orderDir: 'desc', limit: 2 }),
       ]);
 
       const items: ActivityItem[] = [];
 
       if (results[0].status === 'fulfilled' && results[0].value.data)
-        (results[0].value.data as any[]).forEach(u => items.push({ id: `user-${u.id}`, type: 'user_joined', description: `${u.name} joined as ${u.role}`, created_at: u.created_at, user_name: u.name }));
+        (results[0].value.data as any[]).forEach((u: any) => items.push({ id: `user-${u.id}`, type: 'user_joined', description: `${u.name} joined as ${u.role}`, created_at: u.created_at, user_name: u.name }));
 
       if (results[1].status === 'fulfilled' && results[1].value.data) {
-        (results[1].value.data as any[]).forEach(c => {
+        (results[1].value.data as any[]).forEach((c: any) => {
           const t = c.status === 'completed' ? 'contract_completed' : 'contract_created';
           items.push({ id: `contract-${c.id}`, type: t as any, description: c.status === 'completed' ? `Contract completed (${formatCurrency(c.amount || 0)})` : `New contract: ${formatCurrency(c.amount || 0)}`, created_at: c.created_at, amount: c.amount });
         });
       }
 
       if (results[2].status === 'fulfilled' && results[2].value.data)
-        (results[2].value.data as any[]).forEach(d => items.push({ id: `dispute-${d.id}`, type: 'dispute_filed', description: `Dispute: ${(d.reason || '').slice(0, 50)}`, created_at: d.created_at }));
+        (results[2].value.data as any[]).forEach((d: any) => items.push({ id: `dispute-${d.id}`, type: 'dispute_filed', description: `Dispute: ${(d.reason || '').slice(0, 50)}`, created_at: d.created_at }));
 
       if (results[3].status === 'fulfilled' && results[3].value.data)
-        (results[3].value.data as any[]).forEach(p => items.push({ id: `project-${p.id}`, type: 'project_created', description: `Project: ${(p.title || 'Untitled').slice(0, 40)} (${p.status || 'open'})`, created_at: p.created_at }));
+        (results[3].value.data as any[]).forEach((p: any) => items.push({ id: `project-${p.id}`, type: 'project_created', description: `Project: ${(p.title || 'Untitled').slice(0, 40)} (${p.status || 'open'})`, created_at: p.created_at }));
 
       if (results[4].status === 'fulfilled' && results[4].value.data)
-        (results[4].value.data as any[]).forEach(w => items.push({ id: `payment-${w.id}`, type: 'payment_received', description: `${w.type === 'withdrawal' ? 'Withdrawal' : 'Payment'} of ${formatCurrency(w.amount || 0)} (${w.status})`, created_at: w.created_at, amount: w.amount }));
+        (results[4].value.data as any[]).forEach((w: any) => items.push({ id: `payment-${w.id}`, type: 'payment_received', description: `${w.type === 'withdrawal' ? 'Withdrawal' : 'Payment'} of ${formatCurrency(w.amount || 0)} (${w.status})`, created_at: w.created_at, amount: w.amount }));
 
       items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setActivities(items.slice(0, 15));

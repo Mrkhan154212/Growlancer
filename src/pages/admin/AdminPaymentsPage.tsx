@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, RefreshCw, Search, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
+import { adminQuery, adminUpdate, adminInsert } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 
 interface Transaction {
@@ -45,17 +46,21 @@ export function AdminPaymentsPage() {
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase.from('transactions')
-        .select('id, user_id, contract_id, type, amount, status, description, created_at')
-        .order('created_at', { ascending: false }).limit(100);
-      if (typeFilter !== 'all') query = query.eq('type', typeFilter);
+      const opts: any = {
+        table: 'transactions',
+        select: 'id, user_id, contract_id, type, amount, status, description, created_at',
+        order: 'created_at',
+        orderDir: 'desc',
+        limit: 100,
+      };
+      if (typeFilter !== 'all') opts.filters = { type: typeFilter };
 
-      const { data, error } = await query;
+      const { data, error } = await adminQuery(opts);
       if (error) throw error;
 
       const txs = (data || []) as Transaction[];
       const userIds = [...new Set(txs.map(t => t.user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+      const { data: profiles } = await adminQuery({ table: 'profiles', select: 'id, name, email', in: { id: userIds } });
       const profileMap = new Map((profiles || []).map(p => [p.id, { name: p.name, email: p.email }]));
       setTransactions(txs.map(t => ({ ...t, user: profileMap.get(t.user_id) || null })));
     } catch (err) { console.error(err); }
@@ -75,7 +80,7 @@ export function AdminPaymentsPage() {
     if (!confirm(`Mark transaction as "${status}"?`)) return;
     setActionLoading(`${txId}-${status}`);
     try {
-      await supabase.from('transactions').update({ status }).eq('id', txId);
+      await adminUpdate('transactions', txId, { status });
       await fetchTransactions();
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); }
@@ -195,7 +200,7 @@ export function AdminPaymentsPage() {
                             if (!confirm(`Create a refund transaction for ${formatCurrency(tx.amount)}?`)) return;
                             setActionLoading(`${tx.id}-refund`);
                             try {
-                              await supabase.from('transactions').insert({
+                              await adminInsert('transactions', {
                                 user_id: tx.user_id,
                                 contract_id: tx.contract_id,
                                 type: 'refund' as any,

@@ -3,6 +3,7 @@ import {
   Scale, AlertTriangle, Loader2, RefreshCw, CheckCircle2, XCircle,
   Eye, User, DollarSign, Calendar, Shield, MessageSquare, Clock, Filter
 } from 'lucide-react';
+import { adminQuery, adminUpdate, adminInsert } from '../../lib/adminDataProxy';
 import { supabase, realtimeChannels } from '../../lib/supabase';
 
 interface AdminDispute {
@@ -42,11 +43,15 @@ export function AdminDisputesPage() {
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
     try {
-      const table = supabase.from('disputes' as any);
-      let query = (table as any).select('*').order('created_at', { ascending: false });
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+      const opts: any = {
+        table: 'disputes',
+        select: '*',
+        order: 'created_at',
+        orderDir: 'desc',
+      };
+      if (statusFilter !== 'all') opts.filters = { status: statusFilter };
 
-      const { data, error } = await query;
+      const { data, error } = await adminQuery(opts);
       if (error) throw error;
 
       const cases = (data || []) as AdminDispute[];
@@ -56,8 +61,8 @@ export function AdminDisputesPage() {
       const contractIds = [...new Set(cases.map(d => d.contract_id).filter(Boolean))];
 
       const [profilesRes, contractsRes] = await Promise.all([
-        supabase.from('profiles').select('id, name').in('id', userIds),
-        supabase.from('contracts').select('id, amount, status').in('id', contractIds),
+        adminQuery({ table: 'profiles', select: 'id, name', in: { id: userIds } }),
+        adminQuery({ table: 'contracts', select: 'id, amount, status', in: { id: contractIds } }),
       ]);
 
       const profileMap = new Map((profilesRes.data || []).map(p => [p.id, { name: p.name }]));
@@ -92,9 +97,7 @@ export function AdminDisputesPage() {
       const resolution = action === 'resolved'
         ? `Funds released to freelancer per admin review on ${new Date().toLocaleDateString()}`
         : `Funds refunded to client per admin review on ${new Date().toLocaleDateString()}`;
-      await (supabase.from('disputes' as any) as any)
-        .update({ status: action, resolution, updated_at: new Date().toISOString() })
-        .eq('id', disputeId);
+      await adminUpdate('disputes', disputeId, { status: action, resolution, updated_at: new Date().toISOString() });
       await fetchDisputes();
     } catch (err) { console.error('Failed to update dispute:', err); }
     finally { setActionLoading(null); }
