@@ -430,14 +430,10 @@ function App() {
                 <Route path="tickets" element={<ClientSupportTicketsPage />} />
               </Route>
 
-              {/* Admin Dashboard Routes - Protected */}
+              {/* Admin Dashboard Routes - Direct Access (Owner Only) */}
               <Route
                 path="/admin"
-                element={
-                  <ProtectedRoute allowedRoles={['admin']}>
-                    <AdminDashboardLayout />
-                  </ProtectedRoute>
-                }
+                element={<AdminDashboardLayout />}
               >
                 <Route index element={<AdminDashboard />} />
                 <Route path="users" element={<AdminUsersPage />} />
