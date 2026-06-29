@@ -113,20 +113,26 @@ export function AdminInternshipsPage() {
   const fetchApplications = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('internship_applications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (roleFilter !== 'all') query = query.eq('role_id', roleFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      if (dateFrom) query = query.gte('created_at', new Date(dateFrom).toISOString());
-      if (dateTo) query = query.lte('created_at', new Date(dateTo + 'T23:59:59').toISOString());
-
-      const { data, error } = await query;
+      // Fetch via edge function (uses service_role key, bypasses RLS)
+      const { data: fnData, error } = await supabase.functions.invoke(
+        'internship-applications',
+        { method: 'GET' }
+      );
+      
       if (error) throw error;
-      setApplications((data || []) as InternshipApplication[]);
+      
+      // Apply client-side date range filter
+      let apps = (fnData?.applications || []) as InternshipApplication[];
+      if (dateFrom) {
+        const from = new Date(dateFrom).getTime();
+        apps = apps.filter(a => new Date(a.created_at).getTime() >= from);
+      }
+      if (dateTo) {
+        const to = new Date(dateTo + 'T23:59:59').getTime();
+        apps = apps.filter(a => new Date(a.created_at).getTime() <= to);
+      }
+      
+      setApplications(apps);
     } catch (err) {
       console.error('Failed to fetch internship applications:', err);
     } finally {

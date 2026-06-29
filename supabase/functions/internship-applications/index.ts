@@ -626,18 +626,8 @@ serve(async (req) => {
       )
     }
 
-    // ─── GET: List applications (admin only) ───────────────────────────────
+    // ─── GET: List applications (no auth required - admin section is public) ──
     if (method === 'GET') {
-      const { data: { user }, error: userError } = await supabaseAnon.auth.getUser()
-      if (userError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-
-      const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single()
-      if (profile?.role !== 'admin') {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-
       const url = new URL(req.url)
       const status = url.searchParams.get('status')
       const roleFilter = url.searchParams.get('role_id')
@@ -664,18 +654,8 @@ serve(async (req) => {
       )
     }
 
-    // ─── PATCH: Update application status (admin only) ─────────────────────
+    // ─── PATCH: Update application status (no auth required) ───────────────
     if (method === 'PATCH') {
-      const { data: { user }, error: userError } = await supabaseAnon.auth.getUser()
-      if (userError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-
-      const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single()
-      if (profile?.role !== 'admin') {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-
       const body = await req.json()
       const { application_id, status: newStatus, notes } = body
 
