@@ -159,7 +159,6 @@ export function AdminInternshipsPage() {
           .update({ status, notes: notes || null })
           .eq('id', id);
       }
-      setStatusChangeId(null);
       setNotesInput(prev => ({ ...prev, [id]: '' }));
       setEmailLogs(prev => ({
         ...prev,
