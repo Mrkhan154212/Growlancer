@@ -4,7 +4,6 @@ import {
   Loader2,
   RefreshCw,
   ExternalLink,
-  Eye,
   Mail,
   Phone,
   Download,
@@ -103,8 +102,6 @@ export function AdminInternshipsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<ApplicationStatus>('applied');
   const [notesInput, setNotesInput] = useState<Record<string, string>>({});
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');

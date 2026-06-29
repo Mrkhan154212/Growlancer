@@ -66,6 +66,7 @@ export function AdminSubscriptionsPage() {
   useEffect(() => {
     const channel = realtimeChannels.profiles(`admin-subs-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscription_plans' }, () => fetchData())
       .subscribe();
     channelRef.current = channel;
     return () => { channel.unsubscribe(); };

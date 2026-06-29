@@ -3,7 +3,7 @@ import {
   BarChart3, TrendingUp, Users, DollarSign, Briefcase, Handshake,
   Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, Activity, Zap
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase, realtimeChannels } from '../../lib/supabase';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -80,6 +80,16 @@ export function AdminReportsPage() {
   }, []);
 
   useEffect(() => { fetchMetrics(); }, [fetchMetrics]);
+
+  // Real-time subscription
+  useEffect(() => {
+    const channel = realtimeChannels.profiles(`admin-reports-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchMetrics())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, () => fetchMetrics())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => fetchMetrics())
+      .subscribe();
+    return () => { channel.unsubscribe(); };
+  }, [fetchMetrics]);
 
   if (loading || !metrics) {
     return (

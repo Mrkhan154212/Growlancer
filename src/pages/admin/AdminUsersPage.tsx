@@ -57,10 +57,42 @@ export function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'freelancer' | 'client' | 'admin'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'pro'>('all');
+  const [statsData, setStatsData] = useState<{ total: number; freelancers: number; clients: number; admins: number; pro: number; active: number } | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Fetch platform-wide stats accurately (no limit, full counts)
+  const fetchStats = useCallback(async () => {
+    try {
+      const [
+        { count: totalAll },
+        { count: freelancers },
+        { count: clients },
+        { count: admins },
+        { count: pro },
+        { count: active },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).is('deleted_at', null),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'freelancer').is('deleted_at', null),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'client').is('deleted_at', null),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin').is('deleted_at', null),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_pro', true).is('deleted_at', null),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('onboarding_completed', true).is('deleted_at', null),
+      ]);
+      setStatsData({
+        total: totalAll || 0,
+        freelancers: freelancers || 0,
+        clients: clients || 0,
+        admins: admins || 0,
+        pro: pro || 0,
+        active: active || 0,
+      });
+    } catch (err) {
+      console.error('Failed to fetch user stats:', err);
+    }
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -88,16 +120,16 @@ export function AdminUsersPage() {
     }
   }, [roleFilter, statusFilter]);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchStats(); fetchUsers(); }, [fetchStats, fetchUsers]);
 
   // Real-time subscription
   useEffect(() => {
     const channel = realtimeChannels.profiles(`admin-users-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchUsers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => { fetchStats(); fetchUsers(); })
       .subscribe();
     channelRef.current = channel;
     return () => { channel.unsubscribe(); };
-  }, [fetchUsers]);
+  }, [fetchStats, fetchUsers]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -188,15 +220,6 @@ export function AdminUsersPage() {
     u.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const stats = {
-    total: users.length,
-    freelancers: users.filter(u => u.role === 'freelancer').length,
-    clients: users.filter(u => u.role === 'client').length,
-    admins: users.filter(u => u.role === 'admin').length,
-    pro: users.filter(u => u.is_pro).length,
-    active: users.filter(u => u.onboarding_completed).length,
-  };
-
   return (
     <div className="space-y-8 pb-20 lg:pb-0">
       {/* Header */}
@@ -205,15 +228,15 @@ export function AdminUsersPage() {
         <p className="text-slate-400 text-sm mt-1">Monitor, verify, and manage all platform users</p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Accurate counts from DB */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         {[
-          { label: 'Total', value: stats.total, color: 'text-slate-100' },
-          { label: 'Freelancers', value: stats.freelancers, color: 'text-emerald-400' },
-          { label: 'Clients', value: stats.clients, color: 'text-blue-400' },
-          { label: 'Admins', value: stats.admins, color: 'text-purple-400' },
-          { label: 'Pro', value: stats.pro, color: 'text-amber-400' },
-          { label: 'Active', value: stats.active, color: 'text-green-400' },
+          { label: 'Total', value: statsData?.total ?? users.length, color: 'text-slate-100' },
+          { label: 'Freelancers', value: statsData?.freelancers ?? users.filter(u => u.role === 'freelancer').length, color: 'text-emerald-400' },
+          { label: 'Clients', value: statsData?.clients ?? users.filter(u => u.role === 'client').length, color: 'text-blue-400' },
+          { label: 'Admins', value: statsData?.admins ?? users.filter(u => u.role === 'admin').length, color: 'text-purple-400' },
+          { label: 'Pro', value: statsData?.pro ?? users.filter(u => u.is_pro).length, color: 'text-amber-400' },
+          { label: 'Active', value: statsData?.active ?? users.filter(u => u.onboarding_completed).length, color: 'text-green-400' },
         ].map((stat, i) => (
           <div key={i} className="p-4 rounded-2xl" style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.05)' }}>
             <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">{stat.label}</p>
