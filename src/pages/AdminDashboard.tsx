@@ -363,7 +363,7 @@ function DisputeResolution() {
   useEffect(() => { fetchDisputes(); }, [fetchDisputes]);
   useEffect(() => {
     const channel = supabase.channel(`admin-disp-ov-${Date.now()}`)
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'dispute_cases' }, () => fetchDisputes())
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'disputes' }, () => fetchDisputes())
       .subscribe();
     return () => channel.unsubscribe();
   }, [fetchDisputes]);
@@ -701,7 +701,7 @@ function LiveActivityFeed() {
           setTimeout(() => setNewActivityIds(prev => { const s = new Set(prev); s.delete(item.id); return s; }), 3000);
         }
       })
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'dispute_cases' }, (p) => {
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'disputes' }, (p) => {
         setConnectionStatus('connected');
         const n = p.new as any;
         const item = { id: `dispute-${n.id}-${Date.now()}`, type: 'dispute_filed' as const, description: `Dispute ${p.eventType === 'INSERT' ? 'filed' : 'updated'}: ${(n.reason || '').slice(0, 50)}`, created_at: n.created_at || new Date().toISOString() } as ActivityItem;

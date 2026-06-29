@@ -49,7 +49,7 @@ export function AdminReportsPage() {
         supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'open'),
         supabase.from('contracts').select('*', { count: 'exact', head: true }).in('status', ['active', 'in_progress']),
         supabase.from('contracts').select('amount, platform_fee, created_at'),
-        supabase.from('dispute_cases' as any).select('*', { count: 'exact', head: true }).in('status', ['pending', 'under_review']),
+        supabase.from('disputes' as any).select('*', { count: 'exact', head: true }).in('status', ['pending', 'under_review']),
         supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo),
         supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', twoMonthsAgo).lt('created_at', monthAgo),
         supabase.from('contracts').select('amount').gte('created_at', twoMonthsAgo).lt('created_at', monthAgo),

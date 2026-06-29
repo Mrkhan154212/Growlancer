@@ -16,9 +16,9 @@ END $$;
 
 DO $$
 BEGIN
-  -- dispute_cases (fix: old migration enabled on 'disputes' which doesn't exist)
+  -- disputes (already partially enabled, ensure it's in publication)
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.dispute_cases;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.disputes;
   END IF;
 EXCEPTION WHEN duplicate_object THEN NULL;
   WHEN OTHERS THEN

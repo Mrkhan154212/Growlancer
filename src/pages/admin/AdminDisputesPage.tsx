@@ -42,7 +42,7 @@ export function AdminDisputesPage() {
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
     try {
-      const table = supabase.from('dispute_cases' as any);
+      const table = supabase.from('disputes' as any);
       let query = (table as any).select('*').order('created_at', { ascending: false });
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
 
@@ -76,7 +76,7 @@ export function AdminDisputesPage() {
   useEffect(() => { fetchDisputes(); }, [fetchDisputes]);
   useEffect(() => {
     const channel = supabase.channel(`admin-disputes-realtime-${Date.now()}`)
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'dispute_cases' }, () => fetchDisputes())
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'disputes' }, () => fetchDisputes())
       .subscribe();
     channelRef.current = channel;
     return () => { channel.unsubscribe(); };
@@ -92,7 +92,7 @@ export function AdminDisputesPage() {
       const resolution = action === 'resolved'
         ? `Funds released to freelancer per admin review on ${new Date().toLocaleDateString()}`
         : `Funds refunded to client per admin review on ${new Date().toLocaleDateString()}`;
-      await (supabase.from('dispute_cases' as any) as any)
+      await (supabase.from('disputes' as any) as any)
         .update({ status: action, resolution, updated_at: new Date().toISOString() })
         .eq('id', disputeId);
       await fetchDisputes();
