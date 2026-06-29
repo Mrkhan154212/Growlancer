@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { AdminDashboardFallback } from '../components/LoadingSkeleton';
 import { NotificationsPanel } from '../components/NotificationsPanel';
+import { getAdminSession, adminLogout } from '../components/AdminAuthGuard';
 
 const sidebarLinks = [
   { id: 'overview', path: '/admin', icon: LayoutDashboard, label: 'Overview' },
@@ -62,8 +63,10 @@ export function AdminDashboardLayout() {
     fetchProfile();
   }, [user]);
 
-  // Remove supabase import if it was only used for profile fetch
-  // Note: No longer using direct DB query for profile (bypasses RLS)
+  // Get admin session info for display
+  const adminSession = getAdminSession();
+  const adminName = adminSession?.label || adminProfile?.name || 'Admin';
+  const adminEmail = adminSession?.email || '';
 
   // Search functionality
   const handleSearch = (query: string) => {
@@ -235,10 +238,22 @@ export function AdminDashboardLayout() {
                 )}
               </div>
               <div className="text-left hidden md:block">
-                <p className="text-sm font-bold leading-tight">{adminProfile?.name || 'Admin'}</p>
+                <p className="text-sm font-bold leading-tight">{adminName}</p>
                 <p className="text-[10px] text-emerald-500 font-bold tracking-wide uppercase">Administrator</p>
               </div>
               <ChevronDown className="w-4 h-4 text-slate-500" />
+            </button>
+            {/* Logout button - visible on hover */}
+            <button
+              onClick={adminLogout}
+              className="p-2 hover:bg-red-500/10 rounded-lg text-slate-400 hover:text-red-400 transition-colors"
+              title="Logout from Admin"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
             </button>
           </div>
         </header>

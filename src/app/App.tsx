@@ -20,6 +20,11 @@ const AdminDashboardLayout = lazy(() =>
   import('@layouts/AdminDashboardLayout').then(m => ({ default: m.AdminDashboardLayout }))
 );
 
+// Admin Auth Components
+const AdminAuthGuard = lazy(() =>
+  import('@components/AdminAuthGuard').then(m => ({ default: m.AdminAuthGuard }))
+);
+
 // Public Pages
 const HomePage = lazy(() => import('@pages/HomePage').then(m => ({ default: m.HomePage })));
 const FreelancersSearchPage = lazy(() =>
@@ -430,10 +435,14 @@ function App() {
                 <Route path="tickets" element={<ClientSupportTicketsPage />} />
               </Route>
 
-              {/* Admin Dashboard Routes - Direct Access (Owner Only) */}
+              {/* Admin Dashboard Routes - Protected by Prelogin */}
               <Route
                 path="/admin"
-                element={<AdminDashboardLayout />}
+                element={
+                  <AdminAuthGuard>
+                    <AdminDashboardLayout />
+                  </AdminAuthGuard>
+                }
               >
                 <Route index element={<AdminDashboard />} />
                 <Route path="users" element={<AdminUsersPage />} />

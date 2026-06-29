@@ -27,6 +27,58 @@ serve(async (req) => {
     try { body = await req.json() } catch { /* empty body */ }
     const action = body?.action || 'query'
 
+    // ─── POST: verify_admin (prelogin) ────────────────────────────────
+    if (req.method === 'POST' && action === 'verify_admin') {
+      const { email, password } = body
+
+      if (!email || !password) {
+        return new Response(JSON.stringify({ success: false, error: 'Email and password are required' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Fetch admin credential from database
+      const { data: creds, error: credError } = await supabaseClient
+        .from('admin_credentials')
+        .select('email, password_hash, label, is_active')
+        .eq('email', email.toLowerCase())
+        .eq('is_active', true)
+        .single()
+
+      if (credError || !creds) {
+        return new Response(JSON.stringify({ success: false, error: 'Invalid credentials' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Hash the provided password using SHA-256 and compare
+      const encoder = new TextEncoder()
+      const passwordBuffer = encoder.encode(password)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', passwordBuffer)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const passwordHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+      if (passwordHash !== creds.password_hash) {
+        return new Response(JSON.stringify({ success: false, error: 'Invalid credentials' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Update last_login_at
+      await supabaseClient
+        .from('admin_credentials')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('email', email.toLowerCase())
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        email: creds.email, 
+        label: creds.label,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // ─── POST: counts ──────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'counts') {
       const tables: string[] = body.tables || []
