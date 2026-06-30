@@ -91,4 +91,4 @@ The app is a **working React + Supabase codebase** with public marketing pages, 
 
 ---
 
-**Note**: Growlancer is **pre-launch**; depth of automation and payment coverage should match what is deployed and tested in your Supabase project—iterate in small vertical slices on the workflow above.
+**Note**: Growlancer is **pre-launch**; depth of automation and payment coverage should match what is deployed and tested in your Supabase project—iterate in small vertical slices on the workflow above. Thank You
